@@ -32,12 +32,22 @@ function toSession(user: User): SessionUser {
 export async function loginAction(formData: FormData) {
   const phone = repo.normalizePhone(String(formData.get("phone") ?? ""));
   const password = String(formData.get("password") ?? "");
-  const user = await repo.getUserByPhone(phone);
-  if (!user || !(await compare(password, user.passwordHash))) {
-    return { error: "Celular o contraseña incorrectos." };
+  let role: Role;
+  try {
+    const user = await repo.getUserByPhone(phone);
+    if (!user || !(await compare(password, user.passwordHash))) {
+      return { error: "Celular o contraseña incorrectos." };
+    }
+    await setSessionCookie(toSession(user));
+    role = user.role;
+  } catch (err) {
+    console.error("loginAction failed", err);
+    return {
+      error:
+        "No se pudo conectar con la base de datos. Revisa Supabase y las variables de entorno.",
+    };
   }
-  await setSessionCookie(toSession(user));
-  redirect(homeForRole(user.role));
+  redirect(homeForRole(role));
 }
 
 export async function registerAction(formData: FormData) {
