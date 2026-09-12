@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmForm } from "@/components/confirm-form";
 import { PageTitle } from "@/components/ui";
 import { deleteBusetaAction, saveBusetaAction } from "@/lib/actions";
 import * as repo from "@/lib/repo";
@@ -18,8 +19,12 @@ export default async function BusetasPage() {
         title="Busetas"
         subtitle="Cada buseta se identifica por su número. Luego se asocia a un conductor."
       />
-      <form
+      <ConfirmForm
         action={saveBusetaAction}
+        title="¿Agregar buseta?"
+        message="Se creará una nueva buseta con el número indicado."
+        confirmLabel="Agregar"
+        tone="default"
         className="card mb-6 flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:p-5"
       >
         <div className="min-w-0 flex-1 sm:max-w-xs">
@@ -29,7 +34,7 @@ export default async function BusetasPage() {
         <button className="btn btn-primary w-full sm:w-auto" type="submit">
           Agregar
         </button>
-      </form>
+      </ConfirmForm>
       <div className="space-y-3 sm:hidden">
         {busetas.map((b) => {
           const driver = driverOf(b.id);
@@ -48,12 +53,21 @@ export default async function BusetasPage() {
                   Guardar
                 </button>
               </form>
-              <form action={deleteBusetaAction}>
+              <ConfirmForm
+                action={deleteBusetaAction}
+                title={`¿Eliminar buseta ${b.codigo}?`}
+                message={
+                  driver
+                    ? `Tiene conductor asignado (${driver.name}). Se desvinculará y la buseta quedará archivada (borrado lógico).`
+                    : "La buseta quedará archivada (borrado lógico). El historial se conserva."
+                }
+                confirmLabel="Eliminar"
+              >
                 <input type="hidden" name="id" value={b.id} />
                 <button className="text-sm text-signal" type="submit">
                   Eliminar
                 </button>
-              </form>
+              </ConfirmForm>
             </article>
           );
         })}
@@ -89,12 +103,21 @@ export default async function BusetasPage() {
                   </td>
                   <td>{driver?.name ?? "—"}</td>
                   <td>
-                    <form action={deleteBusetaAction}>
+                    <ConfirmForm
+                      action={deleteBusetaAction}
+                      title={`¿Eliminar buseta ${b.codigo}?`}
+                      message={
+                        driver
+                          ? `Tiene conductor asignado (${driver.name}). Se desvinculará y la buseta quedará archivada.`
+                          : "La buseta quedará archivada (borrado lógico)."
+                      }
+                      confirmLabel="Eliminar"
+                    >
                       <input type="hidden" name="id" value={b.id} />
                       <button className="text-sm text-signal" type="submit">
                         Eliminar
                       </button>
-                    </form>
+                    </ConfirmForm>
                   </td>
                 </tr>
               );

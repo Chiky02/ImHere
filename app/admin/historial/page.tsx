@@ -93,6 +93,12 @@ export default async function HistorialPage({
                 <dt className="text-xs uppercase text-muted">Salida punto</dt>
                 <dd>{r.salidaHora}</dd>
               </div>
+              {r.descripcion ? (
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase text-muted">Nota</dt>
+                  <dd>{r.descripcion}</dd>
+                </div>
+              ) : null}
             </dl>
           </article>
         ))}
@@ -110,6 +116,7 @@ export default async function HistorialPage({
               <th>Salida punto</th>
               <th>Esperada</th>
               <th>Diferencia</th>
+              <th>Nota</th>
             </tr>
           </thead>
           <tbody>
@@ -138,6 +145,9 @@ export default async function HistorialPage({
                   ) : (
                     "—"
                   )}
+                </td>
+                <td className="max-w-[14rem] text-sm text-muted">
+                  {r.descripcion || "—"}
                 </td>
               </tr>
             ))}

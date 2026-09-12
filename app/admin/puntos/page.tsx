@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmForm } from "@/components/confirm-form";
 import { PaginationNav } from "@/components/pagination";
 import { PageTitle } from "@/components/ui";
 import { deletePuntoAction, savePuntoAction } from "@/lib/actions";
@@ -99,12 +100,18 @@ export default async function PuntosPage({
                 </button>
               </div>
             </form>
-            <form action={deletePuntoAction} className="mt-2">
+            <ConfirmForm
+              action={deletePuntoAction}
+              title={`¿Eliminar punto ${p.name}?`}
+              message="El punto quedará archivado (borrado lógico). El historial de cruces se conserva."
+              confirmLabel="Eliminar"
+              className="mt-2"
+            >
               <input type="hidden" name="id" value={p.id} />
               <button className="text-sm text-signal" type="submit">
                 Eliminar
               </button>
-            </form>
+            </ConfirmForm>
           </article>
         ))}
       </div>

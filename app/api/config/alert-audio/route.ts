@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import * as repo from "@/lib/repo";
+import { alertSettingsForUser } from "@/lib/alert-settings";
 import { readSession } from "@/lib/session";
 
 export async function GET() {
@@ -7,7 +7,7 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const settings = await repo.getSettings();
+  const settings = await alertSettingsForUser(user);
   if (!settings.alertSoundData) {
     return NextResponse.json({ error: "no custom audio" }, { status: 404 });
   }
@@ -15,7 +15,7 @@ export async function GET() {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": settings.alertSoundMime || "audio/mpeg",
-      "Cache-Control": "private, max-age=60",
+      "Cache-Control": "private, no-store, max-age=0",
       "Content-Length": String(buffer.length),
     },
   });

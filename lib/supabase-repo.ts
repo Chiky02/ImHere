@@ -21,9 +21,12 @@ type UserRow = {
   phone: string;
   password_hash: string;
   role: Role;
+  role_id?: string | null;
   buseta_id: string | null;
   approved: boolean;
+  active?: boolean | null;
   created_at: string;
+  deleted_at?: string | null;
 };
 
 function mapUser(row: UserRow): User {
@@ -33,9 +36,12 @@ function mapUser(row: UserRow): User {
     phone: row.phone,
     passwordHash: row.password_hash,
     role: row.role,
+    roleId: row.role_id ?? undefined,
     busetaId: row.buseta_id ?? undefined,
     approved: row.approved,
+    active: row.active !== false,
     createdAt: row.created_at,
+    deletedAt: row.deleted_at ?? undefined,
   };
 }
 
@@ -46,8 +52,10 @@ function userRow(user: User) {
     phone: user.phone,
     password_hash: user.passwordHash,
     role: user.role,
+    role_id: user.roleId ?? null,
     buseta_id: user.busetaId ?? null,
     approved: user.approved,
+    active: user.active !== false,
     created_at: user.createdAt,
   };
 }
@@ -56,6 +64,7 @@ export async function listUsers() {
   const { data, error } = await supabaseAdmin()
     .from("users")
     .select("*")
+    .is("deleted_at", null)
     .order("created_at");
   if (error) throw error;
   return (data as UserRow[]).map(mapUser);
@@ -66,6 +75,7 @@ export async function getUserById(id: string) {
     .from("users")
     .select("*")
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   return data ? mapUser(data as UserRow) : undefined;
@@ -76,6 +86,7 @@ export async function getUserByPhone(phone: string) {
     .from("users")
     .select("*")
     .eq("phone", normalizePhone(phone))
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   return data ? mapUser(data as UserRow) : undefined;
@@ -91,7 +102,11 @@ export async function upsertUser(user: User) {
 
 export async function listPuntos() {
   const sb = supabaseAdmin();
-  const { data: puntos, error } = await sb.from("puntos").select("*").order("name");
+  const { data: puntos, error } = await sb
+    .from("puntos")
+    .select("*")
+    .is("deleted_at", null)
+    .order("name");
   if (error) throw error;
   const { data: ops, error: opErr } = await sb.from("punto_operadores").select("*");
   if (opErr) throw opErr;
@@ -108,6 +123,7 @@ export async function listPuntos() {
       address: p.address ?? "",
       active: p.active,
       operatorIds: byPunto.get(p.id) ?? [],
+      deletedAt: p.deleted_at ?? undefined,
     }),
   );
 }
@@ -136,7 +152,10 @@ export async function upsertPunto(punto: Punto) {
 }
 
 export async function deletePunto(id: string) {
-  const { error } = await supabaseAdmin().from("puntos").delete().eq("id", id);
+  const { error } = await supabaseAdmin()
+    .from("puntos")
+    .update({ deleted_at: new Date().toISOString(), active: false })
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -144,6 +163,7 @@ export async function listBusetas() {
   const { data, error } = await supabaseAdmin()
     .from("busetas")
     .select("*")
+    .is("deleted_at", null)
     .order("codigo");
   if (error) throw error;
   return (data ?? []).map(
@@ -152,6 +172,7 @@ export async function listBusetas() {
       codigo: b.codigo,
       placa: b.placa ?? "",
       active: b.active,
+      deletedAt: b.deleted_at ?? undefined,
     }),
   );
 }
@@ -161,6 +182,7 @@ export async function getBuseta(id: string) {
     .from("busetas")
     .select("*")
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   if (!data) return undefined;
@@ -169,6 +191,7 @@ export async function getBuseta(id: string) {
     codigo: data.codigo,
     placa: data.placa ?? "",
     active: data.active,
+    deletedAt: data.deleted_at ?? undefined,
   } satisfies Buseta;
 }
 
@@ -179,13 +202,22 @@ export async function upsertBuseta(buseta: Buseta) {
 }
 
 export async function deleteBuseta(id: string) {
-  const { error } = await supabaseAdmin().from("busetas").delete().eq("id", id);
+  const sb = supabaseAdmin();
+  const { error } = await sb
+    .from("busetas")
+    .update({ deleted_at: new Date().toISOString(), active: false })
+    .eq("id", id);
   if (error) throw error;
+  await sb.from("users").update({ buseta_id: null }).eq("buseta_id", id);
 }
 
 export async function listRecorridos() {
   const sb = supabaseAdmin();
-  const { data: recs, error } = await sb.from("recorridos").select("*").order("name");
+  const { data: recs, error } = await sb
+    .from("recorridos")
+    .select("*")
+    .is("deleted_at", null)
+    .order("name");
   if (error) throw error;
   const { data: pts, error: pErr } = await sb
     .from("recorrido_puntos")
@@ -208,6 +240,7 @@ export async function listRecorridos() {
       name: r.name,
       active: r.active,
       puntos: byRec.get(r.id) ?? [],
+      deletedAt: r.deleted_at ?? undefined,
     }),
   );
 }
@@ -240,12 +273,24 @@ export async function upsertRecorrido(recorrido: Recorrido) {
 }
 
 export async function deleteRecorrido(id: string) {
-  const { error } = await supabaseAdmin().from("recorridos").delete().eq("id", id);
+  const sb = supabaseAdmin();
+  const now = new Date().toISOString();
+  const { error } = await sb
+    .from("recorridos")
+    .update({ deleted_at: now, active: false })
+    .eq("id", id);
   if (error) throw error;
+  await sb
+    .from("horarios")
+    .update({ deleted_at: now, active: false })
+    .eq("recorrido_id", id);
 }
 
 export async function listHorarios() {
-  const { data, error } = await supabaseAdmin().from("horarios").select("*");
+  const { data, error } = await supabaseAdmin()
+    .from("horarios")
+    .select("*")
+    .is("deleted_at", null);
   if (error) throw error;
   return (data ?? []).map(
     (h): Horario => ({
@@ -258,6 +303,7 @@ export async function listHorarios() {
       tiempoViajeMin: h.tiempo_viaje_min,
       dias: h.dias ?? [],
       active: h.active,
+      deletedAt: h.deleted_at ?? undefined,
     }),
   );
 }
@@ -279,7 +325,10 @@ export async function upsertHorario(horario: Horario) {
 }
 
 export async function deleteHorario(id: string) {
-  const { error } = await supabaseAdmin().from("horarios").delete().eq("id", id);
+  const { error } = await supabaseAdmin()
+    .from("horarios")
+    .update({ deleted_at: new Date().toISOString(), active: false })
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -344,6 +393,7 @@ function mapRegistro(row: Record<string, unknown>): RegistroCruce {
     horaSalidaReal: (row.hora_salida_real as string | null) ?? undefined,
     registradoPor: row.registrado_por as string,
     evidenciaUrl: (row.evidencia_url as string | null) ?? undefined,
+    descripcion: (row.descripcion as string | null) ?? undefined,
     createdAt: row.created_at as string,
   };
 }
@@ -369,6 +419,7 @@ export async function insertRegistro(registro: RegistroCruce) {
     hora_salida_real: registro.horaSalidaReal ?? null,
     registrado_por: registro.registradoPor,
     evidencia_url: registro.evidenciaUrl ?? null,
+    descripcion: registro.descripcion ?? null,
     created_at: registro.createdAt,
   });
   if (error) throw error;
@@ -377,8 +428,10 @@ export async function insertRegistro(registro: RegistroCruce) {
 
 export async function updateRegistro(id: string, patch: Partial<RegistroCruce>) {
   const row: Record<string, unknown> = {};
-  if (patch.horaSalidaReal) row.hora_salida_real = patch.horaSalidaReal;
-  if (patch.horaLlegadaReal) row.hora_llegada_real = patch.horaLlegadaReal;
+  if (patch.horaSalidaReal !== undefined) row.hora_salida_real = patch.horaSalidaReal;
+  if (patch.horaLlegadaReal !== undefined) row.hora_llegada_real = patch.horaLlegadaReal;
+  if (patch.descripcion !== undefined) row.descripcion = patch.descripcion || null;
+  if (patch.evidenciaUrl !== undefined) row.evidencia_url = patch.evidenciaUrl || null;
   const { data, error } = await supabaseAdmin()
     .from("registros_cruce")
     .update(row)
@@ -518,21 +571,142 @@ export async function getSettings() {
     alertSoundData: data.alert_sound_data ?? undefined,
     alertSoundMime: data.alert_sound_mime ?? undefined,
     alertSoundName: data.alert_sound_name ?? undefined,
+    updatedAt: data.updated_at ?? undefined,
   } satisfies AppSettings;
 }
 
 export async function saveSettings(patch: Partial<AppSettings>) {
   const current = await getSettings();
-  const next: AppSettings = { ...current, ...patch };
+  const next: AppSettings = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
   const { error } = await supabaseAdmin().from("app_settings").upsert({
     id: 1,
     alert_sound_url: next.alertSoundUrl,
     alert_sound_data: next.alertSoundData ?? null,
     alert_sound_mime: next.alertSoundMime ?? null,
     alert_sound_name: next.alertSoundName ?? null,
+    updated_at: next.updatedAt,
   });
   if (error) throw error;
   return next;
+}
+
+export async function getOperatorAlertSettings(userId: string) {
+  const { data, error } = await supabaseAdmin()
+    .from("operator_alert_settings")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    alertSoundUrl: data.alert_sound_url || "/sounds/alerta.wav",
+    alertSoundData: data.alert_sound_data ?? undefined,
+    alertSoundMime: data.alert_sound_mime ?? undefined,
+    alertSoundName: data.alert_sound_name ?? undefined,
+    updatedAt: data.updated_at ?? undefined,
+  } satisfies AppSettings;
+}
+
+export async function saveOperatorAlertSettings(
+  userId: string,
+  patch: Partial<AppSettings>,
+) {
+  const current = (await getOperatorAlertSettings(userId)) ?? {
+    alertSoundUrl: "/sounds/alerta.wav",
+  };
+  const next: AppSettings = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  const { error } = await supabaseAdmin().from("operator_alert_settings").upsert({
+    user_id: userId,
+    alert_sound_url: next.alertSoundUrl,
+    alert_sound_data: next.alertSoundData ?? null,
+    alert_sound_mime: next.alertSoundMime ?? null,
+    alert_sound_name: next.alertSoundName ?? null,
+    updated_at: next.updatedAt,
+  });
+  if (error) throw error;
+  return next;
+}
+
+export async function softDeleteUser(id: string) {
+  const user = await getUserById(id);
+  if (!user) return;
+  const { error } = await supabaseAdmin()
+    .from("users")
+    .update({
+      deleted_at: new Date().toISOString(),
+      phone: `deleted_${id.slice(0, 8)}_${user.phone}`,
+      buseta_id: null,
+      active: false,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+function mapRole(row: Record<string, unknown>): import("./types").AppRole {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    slug: row.slug as string,
+    home: row.home as Role,
+    permissions: (row.permissions as string[]) ?? [],
+    isSystem: Boolean(row.is_system),
+    active: row.active !== false,
+    createdAt: row.created_at as string,
+  };
+}
+
+export async function listRoles() {
+  const { data, error } = await supabaseAdmin()
+    .from("app_roles")
+    .select("*")
+    .order("name");
+  if (error) throw error;
+  return (data ?? [])
+    .map(mapRole)
+    .filter((r) => r.active || r.isSystem);
+}
+
+export async function getRole(id: string) {
+  const { data, error } = await supabaseAdmin()
+    .from("app_roles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRole(data) : undefined;
+}
+
+export async function upsertRole(role: import("./types").AppRole) {
+  const { error } = await supabaseAdmin().from("app_roles").upsert({
+    id: role.id,
+    name: role.name,
+    slug: role.slug,
+    home: role.home,
+    permissions: role.permissions,
+    is_system: role.isSystem,
+    active: role.active,
+    created_at: role.createdAt,
+  });
+  if (error) throw error;
+  return role;
+}
+
+export async function softDeleteRole(id: string) {
+  const role = await getRole(id);
+  if (!role || role.isSystem) return;
+  const { error } = await supabaseAdmin()
+    .from("app_roles")
+    .update({ active: false })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export { normalizePhone };

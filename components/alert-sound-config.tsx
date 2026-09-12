@@ -6,15 +6,18 @@ import {
   saveAlertSoundUrlAction,
   uploadAlertSoundAction,
 } from "@/lib/actions";
+import { ConfirmForm } from "./confirm-form";
 
 export function AlertSoundConfig({
   currentUrl,
   soundName,
   hasCustomUpload,
+  scopeLabel = "del sistema",
 }: {
   currentUrl: string;
   soundName: string | null;
   hasCustomUpload: boolean;
+  scopeLabel?: string;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -32,30 +35,34 @@ export function AlertSoundConfig({
 
   async function preview() {
     try {
-      if (!audioRef.current) audioRef.current = new Audio(currentUrl);
-      else audioRef.current.src = currentUrl;
-      audioRef.current.loop = false;
-      await audioRef.current.play();
+      stopPreview();
+      const audio = new Audio(`${currentUrl}${currentUrl.includes("?") ? "&" : "?"}preview=${Date.now()}`);
+      audioRef.current = audio;
+      audio.loop = false;
+      await audio.play();
       setPreviewing(true);
-      audioRef.current.onended = () => setPreviewing(false);
+      audio.onended = () => setPreviewing(false);
     } catch {
       setPreviewing(false);
     }
   }
 
   function stopPreview() {
-    audioRef.current?.pause();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
     setPreviewing(false);
   }
 
   return (
     <div className="space-y-5">
       <div className="card space-y-3 p-4 sm:p-6">
-        <h2 className="display text-xl">Sonido actual</h2>
+        <h2 className="display text-xl">Sonido actual ({scopeLabel})</h2>
         <p className="text-sm text-muted break-all">
           {hasCustomUpload
             ? `Archivo subido: ${soundName ?? "audio personalizado"}`
-            : currentUrl}
+            : currentUrl.split("?")[0]}
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-primary" onClick={preview}>
@@ -66,19 +73,29 @@ export function AlertSoundConfig({
               Detener
             </button>
           ) : null}
-          <form action={resetAlertSoundAction}>
+          <ConfirmForm
+            action={resetAlertSoundAction}
+            title="¿Restaurar sirena?"
+            message="Se volverá al sonido por defecto. Esta acción no se puede deshacer desde aquí."
+            confirmLabel="Restaurar"
+            tone="default"
+          >
             <button className="btn btn-ghost" type="submit">
               Restaurar sirena por defecto
             </button>
-          </form>
+          </ConfirmForm>
         </div>
+        <p className="text-xs text-muted">
+          Si “Probar” suena bien pero la alerta del panel no, recarga el panel del
+          operador o pulsa otra vez <strong>Activar sonido</strong> para cargar el
+          audio nuevo.
+        </p>
       </div>
 
       <form action={upAction} className="card space-y-4 p-4 sm:p-6">
         <h2 className="display text-xl">Subir audio</h2>
         <p className="text-sm text-muted">
-          MP3, WAV u OGG. Máximo 3 MB. Se guarda en la configuración del sistema
-          (no hace falta .env).
+          MP3, WAV u OGG. Máximo 3 MB.
         </p>
         {upState?.error ? (
           <p className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-signal">
@@ -120,7 +137,7 @@ export function AlertSoundConfig({
           <input
             id="alertSoundUrl"
             name="alertSoundUrl"
-            defaultValue={hasCustomUpload ? "" : currentUrl}
+            defaultValue={hasCustomUpload ? "" : currentUrl.split("?")[0]}
             placeholder="/sounds/alerta.wav"
             required
           />

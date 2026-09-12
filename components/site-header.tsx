@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { logoutAction } from "@/lib/actions";
 import type { SessionUser } from "@/lib/types";
+import { ConfirmForm } from "./confirm-form";
 
 type NavLink = { href: string; label: string };
 
@@ -77,16 +78,22 @@ export function SiteHeader({
 
           <div className="ml-auto flex shrink-0 items-center gap-2 text-sm sm:gap-3">
             <span className="hidden max-w-[12rem] truncate opacity-90 md:block">
-              {user.name} · {roleLabel(user.role)}
+              {user.name} · {user.roleName ?? roleLabel(user.role)}
             </span>
-            <form action={logoutAction}>
+            <ConfirmForm
+              action={logoutAction}
+              title="¿Cerrar sesión?"
+              message="Tendrás que volver a iniciar sesión para usar el sistema."
+              confirmLabel="Salir"
+              tone="default"
+            >
               <button
                 type="submit"
                 className="rounded-full border border-white/30 px-3 py-1 text-xs hover:bg-white/10"
               >
                 Salir
               </button>
-            </form>
+            </ConfirmForm>
           </div>
         </div>
       </header>
@@ -116,7 +123,7 @@ export function SiteHeader({
               Menú
             </p>
             <p className="truncate text-sm text-muted">
-              {user.name} · {roleLabel(user.role)}
+              {user.name} · {user.roleName ?? roleLabel(user.role)}
             </p>
           </div>
           <button
@@ -147,14 +154,20 @@ export function SiteHeader({
           })}
         </nav>
         <div className="border-t border-line p-3">
-          <form action={logoutAction}>
+          <ConfirmForm
+            action={logoutAction}
+            title="¿Cerrar sesión?"
+            message="Tendrás que volver a iniciar sesión para usar el sistema."
+            confirmLabel="Salir"
+            tone="default"
+          >
             <button
               type="submit"
               className="btn btn-ghost w-full border-[var(--forest)]/30 text-[var(--forest-2)]"
             >
               Salir
             </button>
-          </form>
+          </ConfirmForm>
         </div>
       </aside>
     </>

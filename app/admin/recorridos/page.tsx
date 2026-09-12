@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmForm } from "@/components/confirm-form";
 import { PaginationNav } from "@/components/pagination";
 import { PageTitle } from "@/components/ui";
 import { RecorridoForm } from "@/components/recorrido-form";
@@ -47,12 +48,17 @@ export default async function RecorridosPage({
               puntos={puntos.filter((p) => p.active)}
               recorrido={r}
             />
-            <form action={deleteRecorridoAction}>
+            <ConfirmForm
+              action={deleteRecorridoAction}
+              title={`¿Eliminar recorrido ${r.name}?`}
+              message="El recorrido y sus horarios quedarán archivados (borrado lógico)."
+              confirmLabel="Eliminar"
+            >
               <input type="hidden" name="id" value={r.id} />
               <button className="text-sm text-signal" type="submit">
                 Eliminar {r.name}
               </button>
-            </form>
+            </ConfirmForm>
           </div>
         ))}
       </div>

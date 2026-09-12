@@ -23,6 +23,13 @@ export class AlertPlayer {
     }
   }
 
+  /** Force reload even if the base path is the same (cache-bust query). */
+  forceSource(src: string) {
+    this.stop();
+    this.src = src || FALLBACK_ALERT_SRC;
+    this.audio = null;
+  }
+
   /** Debe llamarse desde un click del usuario (política del navegador). */
   async unlock(src?: string) {
     if (src) this.setSource(src);

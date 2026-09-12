@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmForm } from "@/components/confirm-form";
 import { PaginationNav } from "@/components/pagination";
 import { PageTitle } from "@/components/ui";
 import { deleteHorarioAction, saveHorarioAction } from "@/lib/actions";
@@ -128,12 +129,17 @@ export default async function HorariosPage({
                 </td>
                 <td>{h.dias.map((d) => DIA_LABELS[d]).join(" ")}</td>
                 <td>
-                  <form action={deleteHorarioAction}>
+                  <ConfirmForm
+                    action={deleteHorarioAction}
+                    title="¿Quitar este horario?"
+                    message="El horario quedará archivado (borrado lógico)."
+                    confirmLabel="Quitar"
+                  >
                     <input type="hidden" name="id" value={h.id} />
                     <button className="text-sm text-signal" type="submit">
                       Quitar
                     </button>
-                  </form>
+                  </ConfirmForm>
                 </td>
               </tr>
             ))}

@@ -1,6 +1,8 @@
 import { readDb, updateDb } from "./file-db";
+import { ensureRoles } from "./role-seed";
 import type {
   Alerta,
+  AppRole,
   AppSettings,
   Buseta,
   Horario,
@@ -13,16 +15,18 @@ import type {
 } from "./types";
 
 export async function listUsers() {
-  return (await readDb()).users;
+  return (await readDb()).users.filter((u) => !u.deletedAt);
 }
 
 export async function getUserById(id: string) {
-  return (await readDb()).users.find((u) => u.id === id);
+  const u = (await readDb()).users.find((u) => u.id === id);
+  return u && !u.deletedAt ? u : undefined;
 }
 
 export async function getUserByPhone(phone: string) {
   const normalized = normalizePhone(phone);
-  return (await readDb()).users.find((u) => u.phone === normalized);
+  const u = (await readDb()).users.find((u) => u.phone === normalized);
+  return u && !u.deletedAt ? u : undefined;
 }
 
 export async function upsertUser(user: User) {
@@ -35,11 +39,12 @@ export async function upsertUser(user: User) {
 }
 
 export async function listPuntos() {
-  return (await readDb()).puntos;
+  return (await readDb()).puntos.filter((p) => !p.deletedAt);
 }
 
 export async function getPunto(id: string) {
-  return (await readDb()).puntos.find((p) => p.id === id);
+  const p = (await readDb()).puntos.find((p) => p.id === id);
+  return p && !p.deletedAt ? p : undefined;
 }
 
 export async function upsertPunto(punto: Punto) {
@@ -53,20 +58,18 @@ export async function upsertPunto(punto: Punto) {
 
 export async function deletePunto(id: string) {
   return updateDb((db) => {
-    db.puntos = db.puntos.filter((p) => p.id !== id);
-    db.recorridos = db.recorridos.map((r) => ({
-      ...r,
-      puntos: r.puntos.filter((p) => p.puntoId !== id),
-    }));
+    const i = db.puntos.findIndex((p) => p.id === id);
+    if (i >= 0) db.puntos[i] = { ...db.puntos[i], deletedAt: new Date().toISOString(), active: false };
   });
 }
 
 export async function listBusetas() {
-  return (await readDb()).busetas;
+  return (await readDb()).busetas.filter((b) => !b.deletedAt);
 }
 
 export async function getBuseta(id: string) {
-  return (await readDb()).busetas.find((b) => b.id === id);
+  const b = (await readDb()).busetas.find((b) => b.id === id);
+  return b && !b.deletedAt ? b : undefined;
 }
 
 export async function upsertBuseta(buseta: Buseta) {
@@ -80,16 +83,27 @@ export async function upsertBuseta(buseta: Buseta) {
 
 export async function deleteBuseta(id: string) {
   return updateDb((db) => {
-    db.busetas = db.busetas.filter((b) => b.id !== id);
+    const i = db.busetas.findIndex((b) => b.id === id);
+    if (i >= 0) {
+      db.busetas[i] = {
+        ...db.busetas[i],
+        deletedAt: new Date().toISOString(),
+        active: false,
+      };
+    }
+    for (const u of db.users) {
+      if (u.busetaId === id) u.busetaId = undefined;
+    }
   });
 }
 
 export async function listRecorridos() {
-  return (await readDb()).recorridos;
+  return (await readDb()).recorridos.filter((r) => !r.deletedAt);
 }
 
 export async function getRecorrido(id: string) {
-  return (await readDb()).recorridos.find((r) => r.id === id);
+  const r = (await readDb()).recorridos.find((r) => r.id === id);
+  return r && !r.deletedAt ? r : undefined;
 }
 
 export async function upsertRecorrido(recorrido: Recorrido) {
@@ -103,13 +117,23 @@ export async function upsertRecorrido(recorrido: Recorrido) {
 
 export async function deleteRecorrido(id: string) {
   return updateDb((db) => {
-    db.recorridos = db.recorridos.filter((r) => r.id !== id);
-    db.horarios = db.horarios.filter((h) => h.recorridoId !== id);
+    const i = db.recorridos.findIndex((r) => r.id === id);
+    if (i >= 0) {
+      db.recorridos[i] = {
+        ...db.recorridos[i],
+        deletedAt: new Date().toISOString(),
+        active: false,
+      };
+    }
+    const now = new Date().toISOString();
+    db.horarios = db.horarios.map((h) =>
+      h.recorridoId === id ? { ...h, deletedAt: now, active: false } : h,
+    );
   });
 }
 
 export async function listHorarios() {
-  return (await readDb()).horarios;
+  return (await readDb()).horarios.filter((h) => !h.deletedAt);
 }
 
 export async function upsertHorario(horario: Horario) {
@@ -123,7 +147,14 @@ export async function upsertHorario(horario: Horario) {
 
 export async function deleteHorario(id: string) {
   return updateDb((db) => {
-    db.horarios = db.horarios.filter((h) => h.id !== id);
+    const i = db.horarios.findIndex((h) => h.id === id);
+    if (i >= 0) {
+      db.horarios[i] = {
+        ...db.horarios[i],
+        deletedAt: new Date().toISOString(),
+        active: false,
+      };
+    }
   });
 }
 
@@ -236,8 +267,84 @@ export async function getSettings() {
 export async function saveSettings(patch: Partial<AppSettings>) {
   return updateDb((db) => {
     if (!db.settings) db.settings = { alertSoundUrl: "/sounds/alerta.wav" };
-    db.settings = { ...db.settings, ...patch };
+    db.settings = {
+      ...db.settings,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
     return db.settings;
   });
 }
+
+export async function getOperatorAlertSettings(userId: string) {
+  const db = await readDb();
+  return db.operatorAlertSettings?.[userId] ?? null;
+}
+
+export async function saveOperatorAlertSettings(
+  userId: string,
+  patch: Partial<AppSettings>,
+) {
+  return updateDb((db) => {
+    if (!db.operatorAlertSettings) db.operatorAlertSettings = {};
+    const current = db.operatorAlertSettings[userId] ?? {
+      alertSoundUrl: "/sounds/alerta.wav",
+    };
+    const next = {
+      ...current,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    db.operatorAlertSettings[userId] = next;
+    return next;
+  });
+}
+
+export async function softDeleteUser(id: string) {
+  return updateDb((db) => {
+    const i = db.users.findIndex((u) => u.id === id);
+    if (i >= 0) {
+      const u = db.users[i];
+      db.users[i] = {
+        ...u,
+        deletedAt: new Date().toISOString(),
+        phone: `deleted_${id.slice(0, 8)}_${u.phone}`,
+        busetaId: undefined,
+        active: false,
+      };
+    }
+  });
+}
+
+export async function listRoles() {
+  const db = await readDb();
+  ensureRoles(db);
+  return db.roles.filter((r) => r.active || r.isSystem);
+}
+
+export async function getRole(id: string) {
+  const db = await readDb();
+  ensureRoles(db);
+  return db.roles.find((r) => r.id === id);
+}
+
+export async function upsertRole(role: AppRole) {
+  return updateDb((db) => {
+    ensureRoles(db);
+    const i = db.roles.findIndex((r) => r.id === role.id);
+    if (i >= 0) db.roles[i] = role;
+    else db.roles.push(role);
+    return role;
+  });
+}
+
+export async function softDeleteRole(id: string) {
+  return updateDb((db) => {
+    ensureRoles(db);
+    const role = db.roles.find((r) => r.id === id);
+    if (!role || role.isSystem) return;
+    role.active = false;
+  });
+}
+
 

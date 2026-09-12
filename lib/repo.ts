@@ -78,5 +78,21 @@ export const getSettings = (...a: Parameters<typeof fileRepo.getSettings>) =>
   impl().getSettings(...a);
 export const saveSettings = (...a: Parameters<typeof fileRepo.saveSettings>) =>
   impl().saveSettings(...a);
+export const getOperatorAlertSettings = (
+  ...a: Parameters<typeof fileRepo.getOperatorAlertSettings>
+) => impl().getOperatorAlertSettings(...a);
+export const saveOperatorAlertSettings = (
+  ...a: Parameters<typeof fileRepo.saveOperatorAlertSettings>
+) => impl().saveOperatorAlertSettings(...a);
+export const softDeleteUser = (...a: Parameters<typeof fileRepo.softDeleteUser>) =>
+  impl().softDeleteUser(...a);
+export const listRoles = (...a: Parameters<typeof fileRepo.listRoles>) =>
+  impl().listRoles(...a);
+export const getRole = (...a: Parameters<typeof fileRepo.getRole>) =>
+  impl().getRole(...a);
+export const upsertRole = (...a: Parameters<typeof fileRepo.upsertRole>) =>
+  impl().upsertRole(...a);
+export const softDeleteRole = (...a: Parameters<typeof fileRepo.softDeleteRole>) =>
+  impl().softDeleteRole(...a);
 
 export { normalizePhone } from "./file-repo";

@@ -1,5 +1,7 @@
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { ensureRoles, systemRolesSeed } from "./role-seed";
+import { SYSTEM_ROLE_IDS } from "./permissions";
 import type { Database } from "./types";
 
 /** demo1234 — operadores y conductores de ejemplo */
@@ -29,11 +31,14 @@ function emptyDb(): Database {
     settings: {
       alertSoundUrl: "/sounds/alerta.wav",
     },
+    operatorAlertSettings: {},
+    roles: systemRolesSeed(),
   };
 }
 
 export function seedDb(): Database {
   return {
+    roles: systemRolesSeed(),
     users: [
       {
         id: "user-admin",
@@ -41,7 +46,9 @@ export function seedDb(): Database {
         phone: "3144200204",
         passwordHash: SEED_HASH_ADMIN,
         role: "admin",
+        roleId: SYSTEM_ROLE_IDS.admin,
         approved: true,
+        active: true,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
       {
@@ -50,7 +57,9 @@ export function seedDb(): Database {
         phone: "3000000001",
         passwordHash: SEED_HASH_DEMO,
         role: "operator",
+        roleId: SYSTEM_ROLE_IDS.operator,
         approved: true,
+        active: true,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
       {
@@ -59,8 +68,10 @@ export function seedDb(): Database {
         phone: "3000000002",
         passwordHash: SEED_HASH_DEMO,
         role: "driver",
+        roleId: SYSTEM_ROLE_IDS.driver,
         busetaId: "buseta-12",
         approved: true,
+        active: true,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
       {
@@ -69,8 +80,10 @@ export function seedDb(): Database {
         phone: "3000000003",
         passwordHash: SEED_HASH_DEMO,
         role: "driver",
+        roleId: SYSTEM_ROLE_IDS.driver,
         busetaId: "buseta-07",
         approved: true,
+        active: true,
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ],
@@ -136,6 +149,7 @@ export function seedDb(): Database {
     settings: {
       alertSoundUrl: "/sounds/alerta.wav",
     },
+    operatorAlertSettings: {},
   };
 }
 
@@ -176,6 +190,10 @@ export async function readDb(): Promise<Database> {
     if (!parsed.settings) {
       parsed.settings = { alertSoundUrl: "/sounds/alerta.wav" };
     }
+    if (!parsed.operatorAlertSettings) {
+      parsed.operatorAlertSettings = {};
+    }
+    ensureRoles(parsed);
     cache = parsed;
     cacheMtime = mtime;
     return cache;

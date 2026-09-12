@@ -41,6 +41,16 @@ export default function RegistroPage() {
                     required
                   />
                 </div>
+                <div>
+                  <label htmlFor="passwordConfirm">Confirmar contraseña</label>
+                  <input
+                    id="passwordConfirm"
+                    name="passwordConfirm"
+                    type="password"
+                    minLength={6}
+                    required
+                  />
+                </div>
               </>
             }
           />

@@ -2,25 +2,26 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { AlertSoundConfig } from "@/components/alert-sound-config";
 import { PageTitle } from "@/components/ui";
-import * as repo from "@/lib/repo";
-import { resolveAlertSoundUrl } from "@/lib/settings";
+import { resolvedAlertSoundForUser } from "@/lib/alert-settings";
 import { readSession } from "@/lib/session";
 
-export default async function ConfiguracionPage() {
+export default async function OperadorSonidoPage() {
   const user = await readSession();
-  if (!user || user.role !== "admin") redirect("/login");
-  const settings = await repo.getSettings();
+  if (!user || user.role !== "operator") {
+    redirect(user?.role === "admin" ? "/admin/configuracion" : "/login");
+  }
+  const { settings, url } = await resolvedAlertSoundForUser(user);
   return (
     <AppShell user={user}>
       <PageTitle
-        title="Configuración"
-        subtitle="Sonido de alerta del panel cuando un bus avisa que viene."
+        title="Sonido de alerta"
+        subtitle="Elige el audio que escucharás en tu panel cuando un bus avise."
       />
       <AlertSoundConfig
-        currentUrl={resolveAlertSoundUrl(settings)}
+        currentUrl={url}
         soundName={settings.alertSoundName ?? null}
         hasCustomUpload={Boolean(settings.alertSoundData)}
-        scopeLabel="global (todos los operadores sin sonido propio)"
+        scopeLabel="personal"
       />
     </AppShell>
   );

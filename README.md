@@ -48,6 +48,9 @@ Configured in the app: **Admin → Config** (`/admin/configuracion`).
 2. In **SQL Editor**, run in order:
    - `supabase/migrations/001_init.sql`
    - `supabase/migrations/002_settings.sql`
+   - `supabase/migrations/003_soft_delete_and_alert.sql`
+   - `supabase/migrations/004_registro_descripcion.sql`
+   - `supabase/migrations/005_roles_permissions.sql`
    - (optional) `supabase/seed.sql` — demo users
 3. In **Project Settings → API**, copy:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`

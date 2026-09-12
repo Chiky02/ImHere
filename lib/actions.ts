@@ -3,31 +3,26 @@
 import { hash, compare } from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { buildSessionUser } from "./auth-user";
+import {
+  hasPermission,
+  sanitizePermissions,
+  SYSTEM_ROLE_IDS,
+} from "./permissions";
 import * as repo from "./repo";
 import { clearSessionCookie, homeForRole, readSession, setSessionCookie } from "./session";
 import { nowIso } from "./time";
 import { notifyDriver } from "./push";
 import type {
+  AppRole,
   Buseta,
   Horario,
   Punto,
   Recorrido,
   RecorridoPunto,
   Role,
-  SessionUser,
   User,
 } from "./types";
-
-function toSession(user: User): SessionUser {
-  return {
-    id: user.id,
-    name: user.name,
-    phone: user.phone,
-    role: user.role,
-    busetaId: user.busetaId,
-    approved: user.approved,
-  };
-}
 
 export async function loginAction(formData: FormData) {
   const phone = repo.normalizePhone(String(formData.get("phone") ?? ""));
@@ -38,8 +33,12 @@ export async function loginAction(formData: FormData) {
     if (!user || !(await compare(password, user.passwordHash))) {
       return { error: "Celular o contraseña incorrectos." };
     }
-    await setSessionCookie(toSession(user));
-    role = user.role;
+    if (user.active === false) {
+      return { error: "Esta cuenta está inactiva. Contacta al administrador." };
+    }
+    const session = await buildSessionUser(user);
+    await setSessionCookie(session);
+    role = session.role;
   } catch (err) {
     console.error("loginAction failed", err);
     return {
@@ -54,8 +53,16 @@ export async function registerAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = repo.normalizePhone(String(formData.get("phone") ?? ""));
   const password = String(formData.get("password") ?? "");
-  if (!name || phone.length < 10 || password.length < 6) {
-    return { error: "Completa nombre, celular (10 dígitos) y una clave de 6+ caracteres." };
+  const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
+  if (!name) return { error: "El nombre es obligatorio." };
+  if (phone.length < 10) {
+    return { error: "El celular debe tener al menos 10 dígitos." };
+  }
+  if (password.length < 6) {
+    return { error: "La contraseña debe tener al menos 6 caracteres." };
+  }
+  if (password !== passwordConfirm) {
+    return { error: "La confirmación de contraseña no coincide." };
   }
   if (await repo.getUserByPhone(phone)) {
     return { error: "Ese celular ya está registrado." };
@@ -66,11 +73,13 @@ export async function registerAction(formData: FormData) {
     phone,
     passwordHash: await hash(password, 10),
     role: "driver",
+    roleId: SYSTEM_ROLE_IDS.driver,
     approved: false,
+    active: true,
     createdAt: nowIso(),
   };
   await repo.upsertUser(user);
-  await setSessionCookie(toSession(user));
+  await setSessionCookie(await buildSessionUser(user));
   redirect("/conductor");
 }
 
@@ -117,8 +126,14 @@ export async function savePuntoAction(formData: FormData) {
 
 export async function deletePuntoAction(formData: FormData) {
   await admin();
-  await repo.deletePunto(String(formData.get("id")));
+  try {
+    await repo.deletePunto(String(formData.get("id")));
+  } catch (err) {
+    console.error("deletePuntoAction", err);
+    return { error: "No se pudo eliminar el punto." };
+  }
   revalidatePath("/admin/puntos");
+  return { ok: true };
 }
 
 export async function saveBusetaAction(formData: FormData) {
@@ -138,8 +153,15 @@ export async function saveBusetaAction(formData: FormData) {
 
 export async function deleteBusetaAction(formData: FormData) {
   await admin();
-  await repo.deleteBuseta(String(formData.get("id")));
+  try {
+    await repo.deleteBuseta(String(formData.get("id")));
+  } catch (err) {
+    console.error("deleteBusetaAction", err);
+    return { error: "No se pudo eliminar la buseta." };
+  }
   revalidatePath("/admin/busetas");
+  revalidatePath("/admin/conductores");
+  return { ok: true };
 }
 
 export async function saveRecorridoAction(formData: FormData) {
@@ -167,8 +189,15 @@ export async function saveRecorridoAction(formData: FormData) {
 
 export async function deleteRecorridoAction(formData: FormData) {
   await admin();
-  await repo.deleteRecorrido(String(formData.get("id")));
+  try {
+    await repo.deleteRecorrido(String(formData.get("id")));
+  } catch (err) {
+    console.error("deleteRecorridoAction", err);
+    return { error: "No se pudo eliminar el recorrido." };
+  }
   revalidatePath("/admin/recorridos");
+  revalidatePath("/admin/horarios");
+  return { ok: true };
 }
 
 export async function saveHorarioAction(formData: FormData) {
@@ -194,34 +223,237 @@ export async function saveHorarioAction(formData: FormData) {
 
 export async function deleteHorarioAction(formData: FormData) {
   await admin();
-  await repo.deleteHorario(String(formData.get("id")));
+  try {
+    await repo.deleteHorario(String(formData.get("id")));
+  } catch (err) {
+    console.error("deleteHorarioAction", err);
+    return { error: "No se pudo eliminar el horario." };
+  }
   revalidatePath("/admin/horarios");
+  return { ok: true };
 }
 
 export async function saveUserAction(formData: FormData) {
   await admin();
   const id = String(formData.get("id") ?? "") || crypto.randomUUID();
   const existing = await repo.getUserById(id);
+  const isNew = !existing;
   const password = String(formData.get("password") ?? "");
-  const role = String(formData.get("role") ?? "driver") as Role;
+  const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
+  const roleId = String(formData.get("roleId") ?? "");
+  const appRole = roleId ? await repo.getRole(roleId) : undefined;
+  if (!appRole || !appRole.active) {
+    return { error: "Selecciona un rol válido." };
+  }
+  const role = appRole.home;
   const phone = repo.normalizePhone(String(formData.get("phone") ?? ""));
+  const name = String(formData.get("name") ?? "").trim();
+  const active = formData.get("active") !== "off";
+
+  if (!name) return { error: "El nombre es obligatorio." };
+  if (phone.length < 10) {
+    return { error: "El celular debe tener al menos 10 dígitos." };
+  }
+  if (isNew && password.length < 6) {
+    return { error: "La contraseña inicial debe tener al menos 6 caracteres." };
+  }
+  if (password && password.length < 6) {
+    return { error: "La contraseña debe tener al menos 6 caracteres." };
+  }
+  if (password && password !== passwordConfirm) {
+    return { error: "La confirmación de contraseña no coincide." };
+  }
+  const other = await repo.getUserByPhone(phone);
+  if (other && other.id !== id) {
+    return { error: "Ese celular ya está registrado." };
+  }
+  if (isNew && !password) {
+    return { error: "Indica una contraseña inicial." };
+  }
+
   const user: User = {
     id,
-    name: String(formData.get("name") ?? "").trim(),
+    name,
     phone,
     passwordHash: password
       ? await hash(password, 10)
-      : existing?.passwordHash || (await hash("demo1234", 10)),
+      : existing!.passwordHash,
     role,
+    roleId: appRole.id,
     busetaId: String(formData.get("busetaId") ?? "") || undefined,
     approved: formData.get("approved") !== "off",
+    active,
     createdAt: existing?.createdAt ?? nowIso(),
   };
-  if (!user.name || phone.length < 10) {
-    return;
+  try {
+    await repo.upsertUser(user);
+  } catch (err) {
+    console.error("saveUserAction", err);
+    return { error: "No se pudo guardar el usuario. Revisa los datos." };
   }
+  revalidatePath("/admin/conductores");
+  return { ok: true, message: isNew ? "Usuario creado correctamente." : "Usuario actualizado." };
+}
+
+export async function updateUserRoleAction(formData: FormData) {
+  await admin();
+  const id = String(formData.get("id") ?? "");
+  const roleId = String(formData.get("roleId") ?? "");
+  const user = await repo.getUserById(id);
+  const appRole = await repo.getRole(roleId);
+  if (!user || !appRole || !appRole.active) {
+    return { error: "Usuario o rol no válido." };
+  }
+  user.roleId = appRole.id;
+  user.role = appRole.home;
   await repo.upsertUser(user);
   revalidatePath("/admin/conductores");
+  return { ok: true };
+}
+
+export async function toggleUserActiveAction(formData: FormData) {
+  await admin();
+  const id = String(formData.get("id") ?? "");
+  const session = await readSession();
+  if (session?.id === id) {
+    return { error: "No puedes desactivar tu propia cuenta." };
+  }
+  const user = await repo.getUserById(id);
+  if (!user) return { error: "Usuario no encontrado." };
+  user.active = formData.get("active") === "on";
+  await repo.upsertUser(user);
+  revalidatePath("/admin/conductores");
+  return { ok: true };
+}
+
+export async function saveRoleAction(formData: FormData) {
+  await admin();
+  const session = await readSession();
+  if (!session || !hasPermission(session, "manage.roles")) {
+    return { error: "No tienes permiso para gestionar roles." };
+  }
+  const id = String(formData.get("id") ?? "") || crypto.randomUUID();
+  const existing = await repo.getRole(id);
+  const name = String(formData.get("name") ?? "").trim();
+  const homeRaw = String(formData.get("home") ?? "driver");
+  if (homeRaw !== "admin" && homeRaw !== "operator" && homeRaw !== "driver") {
+    return { error: "Área de trabajo no válida." };
+  }
+  const home = homeRaw as Role;
+  if (!name) return { error: "El nombre del rol es obligatorio." };
+  if (existing?.isSystem) {
+    // System roles: only permissions can be adjusted carefully
+    const permissions = sanitizePermissions(
+      existing.home,
+      formData.getAll("permissions").map(String),
+    );
+    if (permissions.length === 0) {
+      return { error: "El rol debe tener al menos un permiso." };
+    }
+    await repo.upsertRole({
+      ...existing,
+      permissions,
+    });
+    revalidatePath("/admin/roles");
+    return { ok: true, message: "Permisos del rol de sistema actualizados." };
+  }
+  const slug =
+    String(formData.get("slug") ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, "-") ||
+    name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  const permissions = sanitizePermissions(
+    home,
+    formData.getAll("permissions").map(String),
+  );
+  if (permissions.length === 0) {
+    return { error: "Selecciona al menos un permiso válido para esa área." };
+  }
+  const roles = await repo.listRoles();
+  if (roles.some((r) => r.slug === slug && r.id !== id)) {
+    return { error: "Ya existe un rol con ese identificador." };
+  }
+  const role: AppRole = {
+    id,
+    name,
+    slug,
+    home,
+    permissions,
+    isSystem: false,
+    active: true,
+    createdAt: existing?.createdAt ?? nowIso(),
+  };
+  await repo.upsertRole(role);
+  revalidatePath("/admin/roles");
+  return { ok: true, message: "Rol guardado." };
+}
+
+export async function deleteRoleAction(formData: FormData) {
+  await admin();
+  const session = await readSession();
+  if (!session || !hasPermission(session, "manage.roles")) {
+    return { error: "No tienes permiso para gestionar roles." };
+  }
+  const id = String(formData.get("id") ?? "");
+  const role = await repo.getRole(id);
+  if (!role) return { error: "Rol no encontrado." };
+  if (role.isSystem) return { error: "No se pueden eliminar roles de sistema." };
+  const users = await repo.listUsers();
+  if (users.some((u) => u.roleId === id)) {
+    return { error: "Hay usuarios con este rol. Asígnalles otro rol antes de eliminarlo." };
+  }
+  await repo.softDeleteRole(id);
+  revalidatePath("/admin/roles");
+  return { ok: true };
+}
+
+export async function setOwnBusetaAction(formData: FormData) {
+  const session = await readSession();
+  if (!session || session.role !== "driver") {
+    return { error: "No autorizado." };
+  }
+  if (!hasPermission(session, "conductor.buseta_self")) {
+    return { error: "Tu rol no permite cambiar la buseta." };
+  }
+  const user = await repo.getUserById(session.id);
+  if (!user) return { error: "Usuario no encontrado." };
+  const busetaId = String(formData.get("busetaId") ?? "");
+  if (busetaId) {
+    const buseta = await repo.getBuseta(busetaId);
+    if (!buseta || !buseta.active) {
+      return { error: "Buseta no válida." };
+    }
+  }
+  user.busetaId = busetaId || undefined;
+  await repo.upsertUser(user);
+  await setSessionCookie(await buildSessionUser(user));
+  revalidatePath("/cuenta");
+  revalidatePath("/conductor");
+  return { ok: true, message: "Buseta actualizada." };
+}
+
+export async function deleteUserAction(formData: FormData) {
+  await admin();
+  const id = String(formData.get("id") ?? "");
+  const session = await readSession();
+  if (!id) return { error: "Usuario no válido." };
+  if (session?.id === id) {
+    return { error: "No puedes eliminar tu propia cuenta." };
+  }
+  try {
+    await repo.softDeleteUser(id);
+  } catch (err) {
+    console.error("deleteUserAction", err);
+    return { error: "No se pudo eliminar el usuario." };
+  }
+  revalidatePath("/admin/conductores");
+  return { ok: true };
 }
 
 export async function approveDriverAction(formData: FormData) {
@@ -259,7 +491,7 @@ export async function updateProfileAction(formData: FormData) {
     if (!other || other.id === user.id) user.phone = phone;
   }
   await repo.upsertUser(user);
-  await setSessionCookie(toSession(user));
+  await setSessionCookie(await buildSessionUser(user));
   revalidatePath("/cuenta");
 }
 
@@ -282,7 +514,7 @@ export async function changePasswordAction(formData: FormData) {
   }
   user.passwordHash = await hash(next, 10);
   await repo.upsertUser(user);
-  await setSessionCookie(toSession(user));
+  await setSessionCookie(await buildSessionUser(user));
   revalidatePath("/cuenta");
   revalidatePath("/conductor/perfil");
   return { ok: true };
@@ -326,6 +558,8 @@ export async function registrarLlegadaAction(formData: FormData) {
   const puntoId = String(formData.get("puntoId") ?? "");
   const busetaId = String(formData.get("busetaId") ?? "");
   const horarioId = String(formData.get("horarioId") ?? "") || undefined;
+  const horaLlegadaInput = String(formData.get("horaLlegada") ?? "").trim();
+  const descripcion = String(formData.get("descripcion") ?? "").trim().slice(0, 500);
   if (!conductorId || !puntoId || !busetaId) {
     return { error: "Faltan datos del cruce." };
   }
@@ -335,7 +569,9 @@ export async function registrarLlegadaAction(formData: FormData) {
       return { error: "Ese aviso ya fue registrado." };
     }
   }
-  const hora = nowIso();
+  const { bogotaHhmmToIso, hhmmNow, nowIso, todayDate } = await import("./time");
+  const hhmm = horaLlegadaInput || hhmmNow();
+  const hora = bogotaHhmmToIso(hhmm, todayDate()) ?? nowIso();
   const registro = await repo.insertRegistro({
     id: crypto.randomUUID(),
     puntoId,
@@ -345,24 +581,73 @@ export async function registrarLlegadaAction(formData: FormData) {
     alertaId,
     horaLlegadaReal: hora,
     registradoPor: session.id,
-    createdAt: hora,
+    descripcion: descripcion || undefined,
+    createdAt: nowIso(),
   });
   if (alertaId) await repo.updateAlerta(alertaId, { status: "arrived" });
   await notifyPreviousBus(registro.id, puntoId, hora, false);
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");
+  return { ok: true };
 }
 
 export async function registrarSalidaAction(formData: FormData) {
   await operator();
   const id = String(formData.get("registroId") ?? "");
-  const updated = await repo.updateRegistro(id, { horaSalidaReal: nowIso() });
+  const horaSalidaInput = String(formData.get("horaSalida") ?? "").trim();
+  const current = (await repo.listRegistros()).find((r) => r.id === id);
+  if (!current) return { error: "No se encontró el registro." };
+  const { bogotaHhmmToIso, dateInBogota, hhmmNow, nowIso } = await import("./time");
+  const day = dateInBogota(current.horaLlegadaReal);
+  const hhmm = horaSalidaInput || hhmmNow();
+  const horaSalida = bogotaHhmmToIso(hhmm, day) ?? nowIso();
+  const updated = await repo.updateRegistro(id, { horaSalidaReal: horaSalida });
   if (!updated) return { error: "No se encontró el registro." };
   await notifyPreviousBus(updated.id, updated.puntoId, updated.horaLlegadaReal, true);
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");
+  return { ok: true };
+}
+
+export async function updateRegistroCruceAction(formData: FormData) {
+  await operator();
+  const id = String(formData.get("registroId") ?? "");
+  const current = (await repo.listRegistros()).find((r) => r.id === id);
+  if (!current) return { error: "No se encontró el registro." };
+
+  const horaLlegadaInput = String(formData.get("horaLlegada") ?? "").trim();
+  const horaSalidaInput = String(formData.get("horaSalida") ?? "").trim();
+  const descripcion = String(formData.get("descripcion") ?? "").trim().slice(0, 500);
+  const clearDescripcion = formData.get("clearDescripcion") === "on";
+
+  const { bogotaHhmmToIso, dateInBogota } = await import("./time");
+  const day = dateInBogota(current.horaLlegadaReal);
+  const patch: Partial<import("./types").RegistroCruce> = {};
+
+  if (horaLlegadaInput) {
+    const iso = bogotaHhmmToIso(horaLlegadaInput, day);
+    if (!iso) return { error: "Hora de llegada no válida." };
+    patch.horaLlegadaReal = iso;
+  }
+  if (horaSalidaInput) {
+    const iso = bogotaHhmmToIso(horaSalidaInput, day);
+    if (!iso) return { error: "Hora de salida no válida." };
+    patch.horaSalidaReal = iso;
+  }
+  if (clearDescripcion) {
+    patch.descripcion = "";
+  } else if (formData.has("descripcion")) {
+    patch.descripcion = descripcion;
+  }
+
+  const updated = await repo.updateRegistro(id, patch);
+  if (!updated) return { error: "No se pudo actualizar." };
+  revalidatePath("/operador");
+  revalidatePath("/admin/historial");
+  revalidatePath("/conductor");
+  return { ok: true };
 }
 
 async function notifyPreviousBus(
@@ -421,26 +706,40 @@ export async function savePushSubscriptionAction(sub: {
 
 const MAX_ALERT_BYTES = 3 * 1024 * 1024;
 
+async function requireAlertEditor() {
+  const user = await readSession();
+  if (!user || (user.role !== "admin" && user.role !== "operator")) {
+    throw new Error("No autorizado");
+  }
+  return user;
+}
+
 export async function saveAlertSoundUrlAction(formData: FormData) {
-  await admin();
+  const user = await requireAlertEditor();
   const url = String(formData.get("alertSoundUrl") ?? "").trim();
   if (!url) return { error: "Indica una URL o ruta de audio." };
   if (!(url.startsWith("/") || url.startsWith("https://") || url.startsWith("http://"))) {
     return { error: "La URL debe ser una ruta /... o un enlace http(s)." };
   }
-  await repo.saveSettings({
+  const patch = {
     alertSoundUrl: url,
     alertSoundData: undefined,
     alertSoundMime: undefined,
     alertSoundName: undefined,
-  });
+  };
+  if (user.role === "operator") {
+    await repo.saveOperatorAlertSettings(user.id, patch);
+  } else {
+    await repo.saveSettings(patch);
+  }
   revalidatePath("/admin/configuracion");
   revalidatePath("/operador");
+  revalidatePath("/operador/sonido");
   return { ok: true };
 }
 
 export async function uploadAlertSoundAction(formData: FormData) {
-  await admin();
+  const user = await requireAlertEditor();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { error: "Selecciona un archivo de audio." };
@@ -454,26 +753,38 @@ export async function uploadAlertSoundAction(formData: FormData) {
   }
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString("base64");
-  await repo.saveSettings({
+  const patch = {
     alertSoundUrl: "/api/config/alert-audio",
     alertSoundData: base64,
     alertSoundMime: mime,
     alertSoundName: file.name,
-  });
+  };
+  if (user.role === "operator") {
+    await repo.saveOperatorAlertSettings(user.id, patch);
+  } else {
+    await repo.saveSettings(patch);
+  }
   revalidatePath("/admin/configuracion");
   revalidatePath("/operador");
+  revalidatePath("/operador/sonido");
   return { ok: true };
 }
 
 export async function resetAlertSoundAction() {
-  await admin();
-  await repo.saveSettings({
+  const user = await requireAlertEditor();
+  const patch = {
     alertSoundUrl: "/sounds/alerta.wav",
     alertSoundData: undefined,
     alertSoundMime: undefined,
     alertSoundName: undefined,
-  });
+  };
+  if (user.role === "operator") {
+    await repo.saveOperatorAlertSettings(user.id, patch);
+  } else {
+    await repo.saveSettings(patch);
+  }
   revalidatePath("/admin/configuracion");
   revalidatePath("/operador");
+  revalidatePath("/operador/sonido");
 }
 

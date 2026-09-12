@@ -12,11 +12,11 @@ insert into public.puntos (id, name, address, active) values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'Puente El Espino', 'Segundo control del recorrido', true)
 on conflict (id) do nothing;
 
-insert into public.users (id, name, phone, password_hash, role, buseta_id, approved) values
-  ('11111111-1111-1111-1111-111111111111', 'Administrador', '3144200204', '$2b$10$dKjNHsVYgN.9uoWPCTNdWebbgjt8k1wtXPPQzJvgQgWcemDZb3XnK', 'admin', null, true),
-  ('22222222-2222-2222-2222-222222222222', 'Marta López', '3000000001', '$2b$10$FpGoGh8IcK6mzswbcpO3QO84oiTsUB2q6JVqRM7o.Heb7VGht3f7u', 'operator', null, true),
-  ('33333333-3333-3333-3333-333333333333', 'Carlos Méndez', '3000000002', '$2b$10$FpGoGh8IcK6mzswbcpO3QO84oiTsUB2q6JVqRM7o.Heb7VGht3f7u', 'driver', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', true),
-  ('44444444-4444-4444-4444-444444444444', 'Ana Ruiz', '3000000003', '$2b$10$FpGoGh8IcK6mzswbcpO3QO84oiTsUB2q6JVqRM7o.Heb7VGht3f7u', 'driver', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', true)
+insert into public.users (id, name, phone, password_hash, role, role_id, buseta_id, approved, active) values
+  ('11111111-1111-1111-1111-111111111111', 'Administrador', '3144200204', '$2b$10$dKjNHsVYgN.9uoWPCTNdWebbgjt8k1wtXPPQzJvgQgWcemDZb3XnK', 'admin', '00000000-0000-4000-8000-000000000001', null, true, true),
+  ('22222222-2222-2222-2222-222222222222', 'Marta López', '3000000001', '$2b$10$FpGoGh8IcK6mzswbcpO3QO84oiTsUB2q6JVqRM7o.Heb7VGht3f7u', 'operator', '00000000-0000-4000-8000-000000000002', null, true, true),
+  ('33333333-3333-3333-3333-333333333333', 'Carlos Méndez', '3000000002', '$2b$10$FpGoGh8IcK6mzswbcpO3QO84oiTsUB2q6JVqRM7o.Heb7VGht3f7u', 'driver', '00000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', true, true),
+  ('44444444-4444-4444-4444-444444444444', 'Ana Ruiz', '3000000003', '$2b$10$FpGoGh8IcK6mzswbcpO3QO84oiTsUB2q6JVqRM7o.Heb7VGht3f7u', 'driver', '00000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', true, true)
 on conflict (id) do nothing;
 
 insert into public.punto_operadores (punto_id, user_id) values

@@ -1,5 +1,6 @@
 import { compare } from "bcryptjs";
 import { NextResponse } from "next/server";
+import { buildSessionUser } from "@/lib/auth-user";
 import * as repo from "@/lib/repo";
 import { homeForRole, setSessionCookie } from "@/lib/session";
 
@@ -11,13 +12,17 @@ export async function POST(request: Request) {
   if (!user || !(await compare(password, user.passwordHash))) {
     return NextResponse.json({ error: "Celular o contraseña incorrectos." }, { status: 401 });
   }
-  await setSessionCookie({
-    id: user.id,
-    name: user.name,
-    phone: user.phone,
-    role: user.role,
-    busetaId: user.busetaId,
-    approved: user.approved,
+  if (user.active === false) {
+    return NextResponse.json(
+      { error: "Esta cuenta está inactiva. Contacta al administrador." },
+      { status: 403 },
+    );
+  }
+  const session = await buildSessionUser(user);
+  await setSessionCookie(session);
+  return NextResponse.json({
+    ok: true,
+    role: session.role,
+    home: homeForRole(session.role),
   });
-  return NextResponse.json({ ok: true, role: user.role, home: homeForRole(user.role) });
 }

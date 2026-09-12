@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-import * as repo from "@/lib/repo";
-import { resolveAlertSoundUrl } from "@/lib/settings";
+import { NextRequest, NextResponse } from "next/server";
+import { resolvedAlertSoundForUser } from "@/lib/alert-settings";
 import { readSession } from "@/lib/session";
 
 export async function GET() {
@@ -8,10 +7,18 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const settings = await repo.getSettings();
-  return NextResponse.json({
-    alertSoundUrl: resolveAlertSoundUrl(settings),
-    alertSoundName: settings.alertSoundName ?? null,
-    hasCustomUpload: Boolean(settings.alertSoundData),
-  });
+  const { settings, url } = await resolvedAlertSoundForUser(user);
+  return NextResponse.json(
+    {
+      alertSoundUrl: url,
+      alertSoundName: settings.alertSoundName ?? null,
+      hasCustomUpload: Boolean(settings.alertSoundData),
+      updatedAt: settings.updatedAt ?? null,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }

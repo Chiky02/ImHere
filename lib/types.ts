@@ -1,14 +1,30 @@
 export type Role = "admin" | "operator" | "driver";
 
+export type AppRole = {
+  id: string;
+  name: string;
+  slug: string;
+  /** Determines landing page and which permission family is allowed */
+  home: Role;
+  permissions: string[];
+  isSystem: boolean;
+  active: boolean;
+  createdAt: string;
+};
+
 export type User = {
   id: string;
   name: string;
   phone: string;
   passwordHash: string;
   role: Role;
+  roleId?: string;
   busetaId?: string;
   approved: boolean;
+  /** If false, login is blocked */
+  active: boolean;
   createdAt: string;
+  deletedAt?: string;
 };
 
 export type Punto = {
@@ -17,6 +33,7 @@ export type Punto = {
   address: string;
   operatorIds: string[];
   active: boolean;
+  deletedAt?: string;
 };
 
 export type RecorridoPunto = {
@@ -30,6 +47,7 @@ export type Recorrido = {
   name: string;
   active: boolean;
   puntos: RecorridoPunto[];
+  deletedAt?: string;
 };
 
 export type Buseta = {
@@ -37,6 +55,7 @@ export type Buseta = {
   codigo: string;
   placa: string;
   active: boolean;
+  deletedAt?: string;
 };
 
 export type Horario = {
@@ -49,6 +68,7 @@ export type Horario = {
   tiempoViajeMin: number;
   dias: number[];
   active: boolean;
+  deletedAt?: string;
 };
 
 export type AlertaStatus = "pending" | "arrived" | "cancelled";
@@ -74,6 +94,8 @@ export type RegistroCruce = {
   horaSalidaReal?: string;
   registradoPor: string;
   evidenciaUrl?: string;
+  /** Optional note from the operator (delay reason, etc.) */
+  descripcion?: string;
   createdAt: string;
 };
 
@@ -103,6 +125,8 @@ export type AppSettings = {
   alertSoundData?: string;
   alertSoundMime?: string;
   alertSoundName?: string;
+  /** ISO timestamp for cache-busting audio URLs */
+  updatedAt?: string;
 };
 
 export type Database = {
@@ -116,6 +140,9 @@ export type Database = {
   notificaciones: Notificacion[];
   pushSubscriptions: PushSubscriptionRecord[];
   settings: AppSettings;
+  /** Per-operator alert sound overrides (userId → settings) */
+  operatorAlertSettings: Record<string, AppSettings>;
+  roles: AppRole[];
 };
 
 export type PublicUser = Omit<User, "passwordHash">;
@@ -125,6 +152,10 @@ export type SessionUser = {
   name: string;
   phone: string;
   role: Role;
+  roleId?: string;
+  roleName?: string;
   busetaId?: string;
   approved: boolean;
+  active: boolean;
+  permissions: string[];
 };

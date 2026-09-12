@@ -55,6 +55,7 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
       return {
         ...a,
         conductorName: conductor?.name ?? "Conductor",
+        conductorPhone: conductor?.phone ?? "",
         busetaCodigo: buseta?.codigo ?? "—",
         esperado,
       };

@@ -1,17 +1,6 @@
 import { SiteHeader } from "@/components/site-header";
+import { navLinksForUser } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/types";
-
-const ADMIN_LINKS = [
-  { href: "/admin", label: "Inicio" },
-  { href: "/admin/puntos", label: "Puntos" },
-  { href: "/admin/recorridos", label: "Recorridos" },
-  { href: "/admin/busetas", label: "Busetas" },
-  { href: "/admin/conductores", label: "Personas" },
-  { href: "/admin/horarios", label: "Horarios" },
-  { href: "/admin/historial", label: "Historial" },
-  { href: "/admin/configuracion", label: "Config" },
-  { href: "/cuenta", label: "Cuenta" },
-];
 
 export function AppShell({
   user,
@@ -20,18 +9,7 @@ export function AppShell({
   user: SessionUser;
   children: React.ReactNode;
 }) {
-  const links =
-    user.role === "admin"
-      ? ADMIN_LINKS
-      : user.role === "operator"
-        ? [
-            { href: "/operador", label: "Panel" },
-            { href: "/cuenta", label: "Cuenta" },
-          ]
-        : [
-            { href: "/conductor", label: "Avisar" },
-            { href: "/cuenta", label: "Cuenta" },
-          ];
+  const links = navLinksForUser(user);
 
   return (
     <div className="min-h-full flex flex-col">
