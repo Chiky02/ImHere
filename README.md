@@ -1,79 +1,102 @@
-# Control de puntos
+# Checkpoint control
 
-Sistema web para que los conductores avisen que se acercan a un **punto de control**, el encargado reciba un **sonido**, registre llegada y salida, y **solo el bus anterior en ese punto** reciba la hora del que acaba de cruzar. El admin ve el historial completo. Sirve para **varios puntos** en un recorrido.
+Web system so drivers can announce they are approaching a **checkpoint**, the attendant gets a **sound alert**, records arrival and departure, and **only the previous bus at that checkpoint** gets the time of the bus that just crossed. The admin sees the full history. It supports **multiple checkpoints** on a route.
 
-## Cuentas seed (local / seed.sql)
+## Seed accounts (local / seed.sql)
 
-| Rol | Celular | Contraseña |
+| Role | Phone | Password |
 | --- | --- | --- |
 | Admin | 3144200204 | Contraseña1@ |
-| Operador | 3000000001 | demo1234 |
-| Conductor | 3000000002 | demo1234 |
-| Conductor | 3000000003 | demo1234 |
+| Operator | 3000000001 | demo1234 |
+| Driver | 3000000002 | demo1234 |
+| Driver | 3000000003 | demo1234 |
 
-La buseta **no** se elige al registrarse: el admin la asigna al aprobar o desde Personas.
+The bus is **not** chosen at signup: the admin assigns it when approving or from People.
 
-## Cómo probar el flujo
+## How to test the flow
 
-1. Operador: entra, pulsa **Activar sonido**, deja la pestaña abierta.
-2. Carlos: **Estoy próximo a llegar** en El Recreo.
-3. El panel del operador suena; **Registrar llegada** y luego **Registrar salida**.
-4. Ana hace lo mismo en El Recreo.
-5. Al registrar a Ana, **Carlos** recibe “El siguiente bus ya cruzó” (in-app y push si lo activó). Ana no ve el listado global.
+1. Operator: sign in, press **Enable sound**, leave the tab open.
+2. Carlos: **I'm about to arrive** at El Recreo.
+3. The operator panel plays a sound; **Record arrival**, then **Record departure**.
+4. Ana does the same at El Recreo.
+5. When Ana is recorded, **Carlos** gets “The next bus already crossed”.
 
-## Desarrollo local
+## Local development
 
 ```bash
 cd control-puntos
-cp .env.example .env.local   # o usa el .env.local ya generado
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Sin Supabase, los datos viven en `data/db.json` (se crea solo con el seed).
+Without Supabase, data lives in `data/db.json` (created automatically with the seed).
 
-## Supabase + Vercel (producción)
+## Alert sound
 
-Vercel no mantiene un archivo JSON entre instancias. En producción:
+Configured in the app: **Admin → Config** (`/admin/configuracion`).
 
-1. Crea un proyecto en [supabase.com](https://supabase.com).
-2. SQL Editor: ejecuta `supabase/migrations/001_init.sql` y `supabase/seed.sql`.
-3. Variables en Vercel:
+- Upload an MP3/WAV/OGG (max 3 MB), or
+- Paste a URL `/sounds/...` or `https://...`
+- Default: siren at `public/sounds/alerta.wav`
 
-```
-SESSION_SECRET=
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=
-VAPID_PRIVATE_KEY=
-VAPID_SUBJECT=mailto:tu@correo
-```
+## Deploy to production (Supabase + GitHub + Vercel)
 
-Las claves VAPID: `npx web-push generate-vapid-keys`.
+### 1. Supabase
 
-4. Deploy:
+1. Create a project at [supabase.com](https://supabase.com).
+2. In **SQL Editor**, run in order:
+   - `supabase/migrations/001_init.sql`
+   - `supabase/migrations/002_settings.sql`
+   - (optional) `supabase/seed.sql` — demo users
+3. In **Project Settings → API**, copy:
+   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
+   - `anon` `public` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `service_role` → `SUPABASE_SERVICE_ROLE_KEY` (secret; never expose it on the client)
+
+### 2. GitHub
 
 ```bash
-npx vercel --prod
+cd control-puntos
+git remote add origin https://github.com/YOUR_USER/control-puntos.git
+git add .
+git commit -m "Checkpoint control system"
+git push -u origin main
 ```
 
-El servidor usa la **service role** (omite RLS). El anon key no lee tablas: la regla “solo el bus anterior + admin” está en las Server Actions. El SQL deja RLS activo como defensa.
+Do not commit `.env.local` (already in `.gitignore`).
 
-## Arquitectura
+### 3. Vercel
 
-- Next.js (App Router) en Vercel
-- Auth propia (celular + contraseña, JWT en cookie, roles admin / operator / driver)
-- Persistencia: JSON local **o** Postgres de Supabase si hay `SUPABASE_SERVICE_ROLE_KEY`
-- Panel del punto: polling 1.5 s + audio de alerta (archivo o URL)
-- Conductor: PWA + Web Push
+1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import the GitHub repo.
+2. Framework: Next.js (auto-detected).
+3. Environment variables (Production + Preview):
 
-### Sonido de alerta (panel operador)
+```
+SESSION_SECRET=a-long-random-string
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=...   # optional, push to phone
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:you@email.com
+```
 
-1. Activa el sonido una vez en el panel (requisito del navegador).
-2. Por defecto suena `public/sounds/alerta.wav` (sirena ~8 s) **en bucle** hasta silenciar o registrar llegada.
-3. Para tu propia canción/alarma:
-   - Copia el archivo a `public/sounds/alerta.mp3` (o `.ogg`), **o**
-   - Define `NEXT_PUBLIC_ALERT_SOUND_URL=/sounds/alerta.mp3` o una URL `https://...`
+VAPID (optional): `npx web-push generate-vapid-keys`
 
-Fotos: el registro de cruce ya tiene `evidencia_url` para más adelante.
+4. Deploy. Every push to `main` redeploys.
+5. Sign in as admin → **Config** → upload or set the alert audio.
+
+### Important in production
+
+- Without Supabase keys, Vercel would use a temporary JSON in `/tmp` (it is lost). **Always configure Supabase.**
+- Alert audio is stored in the database (settings), not in environment variables.
+- After the first deploy, change the admin password from **Account**.
+
+## Architecture
+
+- Next.js (App Router) on Vercel
+- Custom auth (phone + password, JWT cookie)
+- Persistence: local JSON **or** Supabase Postgres
+- Checkpoint panel: polling + configurable audio
+- Driver: PWA + Web Push (if VAPID is set)

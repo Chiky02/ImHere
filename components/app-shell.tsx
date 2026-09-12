@@ -9,6 +9,7 @@ const ADMIN_LINKS = [
   { href: "/admin/conductores", label: "Personas" },
   { href: "/admin/horarios", label: "Horarios" },
   { href: "/admin/historial", label: "Historial" },
+  { href: "/admin/configuracion", label: "Config" },
   { href: "/cuenta", label: "Cuenta" },
 ];
 

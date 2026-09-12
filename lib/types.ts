@@ -96,6 +96,15 @@ export type PushSubscriptionRecord = {
   auth: string;
 };
 
+export type AppSettings = {
+  /** URL pública o /api/config/alert-audio si hay archivo subido */
+  alertSoundUrl: string;
+  /** Base64 sin prefijo data: (opcional, archivo subido) */
+  alertSoundData?: string;
+  alertSoundMime?: string;
+  alertSoundName?: string;
+};
+
 export type Database = {
   users: User[];
   puntos: Punto[];
@@ -106,6 +115,7 @@ export type Database = {
   registros: RegistroCruce[];
   notificaciones: Notificacion[];
   pushSubscriptions: PushSubscriptionRecord[];
+  settings: AppSettings;
 };
 
 export type PublicUser = Omit<User, "passwordHash">;

@@ -26,6 +26,9 @@ function emptyDb(): Database {
     registros: [],
     notificaciones: [],
     pushSubscriptions: [],
+    settings: {
+      alertSoundUrl: "/sounds/alerta.wav",
+    },
   };
 }
 
@@ -130,6 +133,9 @@ export function seedDb(): Database {
     registros: [],
     notificaciones: [],
     pushSubscriptions: [],
+    settings: {
+      alertSoundUrl: "/sounds/alerta.wav",
+    },
   };
 }
 
@@ -166,7 +172,11 @@ export async function readDb(): Promise<Database> {
     const mtime = (await stat(path)).mtimeMs;
     if (cache && mtime === cacheMtime) return cache;
     const raw = await readFile(path, "utf8");
-    cache = JSON.parse(raw) as Database;
+    const parsed = JSON.parse(raw) as Database;
+    if (!parsed.settings) {
+      parsed.settings = { alertSoundUrl: "/sounds/alerta.wav" };
+    }
+    cache = parsed;
     cacheMtime = mtime;
     return cache;
   } catch {

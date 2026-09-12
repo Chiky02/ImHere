@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import type {
   Alerta,
+  AppSettings,
   Buseta,
   Horario,
   Notificacion,
@@ -500,6 +501,38 @@ export async function deletePush(endpoint: string) {
     .delete()
     .eq("endpoint", endpoint);
   if (error) throw error;
+}
+
+export async function getSettings() {
+  const { data, error } = await supabaseAdmin()
+    .from("app_settings")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    return { alertSoundUrl: "/sounds/alerta.wav" } satisfies AppSettings;
+  }
+  return {
+    alertSoundUrl: data.alert_sound_url || "/sounds/alerta.wav",
+    alertSoundData: data.alert_sound_data ?? undefined,
+    alertSoundMime: data.alert_sound_mime ?? undefined,
+    alertSoundName: data.alert_sound_name ?? undefined,
+  } satisfies AppSettings;
+}
+
+export async function saveSettings(patch: Partial<AppSettings>) {
+  const current = await getSettings();
+  const next: AppSettings = { ...current, ...patch };
+  const { error } = await supabaseAdmin().from("app_settings").upsert({
+    id: 1,
+    alert_sound_url: next.alertSoundUrl,
+    alert_sound_data: next.alertSoundData ?? null,
+    alert_sound_mime: next.alertSoundMime ?? null,
+    alert_sound_name: next.alertSoundName ?? null,
+  });
+  if (error) throw error;
+  return next;
 }
 
 export { normalizePhone };

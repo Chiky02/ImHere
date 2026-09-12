@@ -1,6 +1,7 @@
 import { readDb, updateDb } from "./file-db";
 import type {
   Alerta,
+  AppSettings,
   Buseta,
   Horario,
   Notificacion,
@@ -226,3 +227,17 @@ export async function deletePush(endpoint: string) {
 export function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
+
+export async function getSettings() {
+  const db = await readDb();
+  return db.settings ?? { alertSoundUrl: "/sounds/alerta.wav" };
+}
+
+export async function saveSettings(patch: Partial<AppSettings>) {
+  return updateDb((db) => {
+    if (!db.settings) db.settings = { alertSoundUrl: "/sounds/alerta.wav" };
+    db.settings = { ...db.settings, ...patch };
+    return db.settings;
+  });
+}
+

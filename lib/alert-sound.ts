@@ -1,17 +1,11 @@
 "use client";
 
-/**
- * Sonido de alerta del panel.
- * 1) Coloca tu canción/alarma en: public/sounds/alerta.mp3 (o .wav / .ogg)
- * 2) O define NEXT_PUBLIC_ALERT_SOUND_URL=https://... en .env
- * Por defecto usa /sounds/alerta.wav (sirena ~8s).
- */
-export const DEFAULT_ALERT_SRC =
-  process.env.NEXT_PUBLIC_ALERT_SOUND_URL?.trim() || "/sounds/alerta.wav";
+export const FALLBACK_ALERT_SRC = "/sounds/alerta.wav";
 
 export class AlertPlayer {
   private audio: HTMLAudioElement | null = null;
   private unlocked = false;
+  private src = FALLBACK_ALERT_SRC;
 
   get isUnlocked() {
     return this.unlocked;
@@ -21,14 +15,22 @@ export class AlertPlayer {
     return Boolean(this.audio && !this.audio.paused);
   }
 
+  setSource(src: string) {
+    if (src && src !== this.src) {
+      this.stop();
+      this.src = src;
+      this.audio = null;
+    }
+  }
+
   /** Debe llamarse desde un click del usuario (política del navegador). */
-  async unlock(src = DEFAULT_ALERT_SRC) {
-    const audio = this.ensure(src);
+  async unlock(src?: string) {
+    if (src) this.setSource(src);
+    const audio = this.ensure();
     audio.loop = false;
     audio.currentTime = 0;
     try {
       await audio.play();
-      // Prueba corta al activar, luego pausa
       window.setTimeout(() => {
         if (audio && !audio.loop) audio.pause();
       }, 900);
@@ -42,7 +44,8 @@ export class AlertPlayer {
 
   async ring(opts?: { loop?: boolean; src?: string }) {
     if (!this.unlocked) return false;
-    const audio = this.ensure(opts?.src);
+    if (opts?.src) this.setSource(opts.src);
+    const audio = this.ensure();
     audio.loop = opts?.loop ?? true;
     try {
       audio.currentTime = 0;
@@ -60,8 +63,8 @@ export class AlertPlayer {
     this.audio.currentTime = 0;
   }
 
-  private ensure(src?: string) {
-    const url = src || DEFAULT_ALERT_SRC;
+  private ensure() {
+    const url = this.src || FALLBACK_ALERT_SRC;
     if (!this.audio || this.audio.dataset.src !== url) {
       this.stop();
       this.audio = new Audio(url);

@@ -23,6 +23,7 @@ export function OperatorPanel({
   );
   const [soundOn, setSoundOn] = useState(false);
   const [ringing, setRinging] = useState(false);
+  const [alertSrc, setAlertSrc] = useState("/sounds/alerta.wav");
   const [pending, start] = useTransition();
   const [bitacoraPage, setBitacoraPage] = useState(1);
   const playerRef = useRef<AlertPlayer | null>(null);
@@ -31,13 +32,28 @@ export function OperatorPanel({
 
   if (!playerRef.current) playerRef.current = new AlertPlayer();
 
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/config/alert-sound", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg: { alertSoundUrl?: string } | null) => {
+        if (!alive || !cfg?.alertSoundUrl) return;
+        setAlertSrc(cfg.alertSoundUrl);
+        playerRef.current?.setSource(cfg.alertSoundUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   function stopRing() {
     playerRef.current?.stop();
     setRinging(false);
   }
 
   async function startRing() {
-    const ok = await playerRef.current?.ring({ loop: true });
+    const ok = await playerRef.current?.ring({ loop: true, src: alertSrc });
     if (ok) setRinging(true);
   }
 
@@ -78,7 +94,7 @@ export function OperatorPanel({
   }, [puntoId]);
 
   async function unlock() {
-    const ok = await playerRef.current?.unlock();
+    const ok = await playerRef.current?.unlock(alertSrc);
     setSoundOn(Boolean(ok));
   }
 
@@ -146,8 +162,8 @@ export function OperatorPanel({
       {!soundOn ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Pulsa <strong>Activar sonido</strong> una vez. Sin eso el navegador
-          bloquea la alarma. Puedes cambiar el audio en{" "}
-          <code className="rounded bg-white px-1">public/sounds/alerta.mp3</code>.
+          bloquea la alarma. El admin configura el audio en{" "}
+          <strong>Config</strong>.
         </p>
       ) : null}
 

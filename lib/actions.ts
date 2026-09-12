@@ -408,3 +408,62 @@ export async function savePushSubscriptionAction(sub: {
     auth: sub.keys.auth,
   });
 }
+
+const MAX_ALERT_BYTES = 3 * 1024 * 1024;
+
+export async function saveAlertSoundUrlAction(formData: FormData) {
+  await admin();
+  const url = String(formData.get("alertSoundUrl") ?? "").trim();
+  if (!url) return { error: "Indica una URL o ruta de audio." };
+  if (!(url.startsWith("/") || url.startsWith("https://") || url.startsWith("http://"))) {
+    return { error: "La URL debe ser una ruta /... o un enlace http(s)." };
+  }
+  await repo.saveSettings({
+    alertSoundUrl: url,
+    alertSoundData: undefined,
+    alertSoundMime: undefined,
+    alertSoundName: undefined,
+  });
+  revalidatePath("/admin/configuracion");
+  revalidatePath("/operador");
+  return { ok: true };
+}
+
+export async function uploadAlertSoundAction(formData: FormData) {
+  await admin();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Selecciona un archivo de audio." };
+  }
+  if (file.size > MAX_ALERT_BYTES) {
+    return { error: "El archivo no puede superar 3 MB." };
+  }
+  const mime = file.type || "audio/mpeg";
+  if (!mime.startsWith("audio/")) {
+    return { error: "Solo se permiten archivos de audio." };
+  }
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const base64 = buffer.toString("base64");
+  await repo.saveSettings({
+    alertSoundUrl: "/api/config/alert-audio",
+    alertSoundData: base64,
+    alertSoundMime: mime,
+    alertSoundName: file.name,
+  });
+  revalidatePath("/admin/configuracion");
+  revalidatePath("/operador");
+  return { ok: true };
+}
+
+export async function resetAlertSoundAction() {
+  await admin();
+  await repo.saveSettings({
+    alertSoundUrl: "/sounds/alerta.wav",
+    alertSoundData: undefined,
+    alertSoundMime: undefined,
+    alertSoundName: undefined,
+  });
+  revalidatePath("/admin/configuracion");
+  revalidatePath("/operador");
+}
+

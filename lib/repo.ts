@@ -74,5 +74,9 @@ export const upsertPush = (...a: Parameters<typeof fileRepo.upsertPush>) =>
   impl().upsertPush(...a);
 export const deletePush = (...a: Parameters<typeof fileRepo.deletePush>) =>
   impl().deletePush(...a);
+export const getSettings = (...a: Parameters<typeof fileRepo.getSettings>) =>
+  impl().getSettings(...a);
+export const saveSettings = (...a: Parameters<typeof fileRepo.saveSettings>) =>
+  impl().saveSettings(...a);
 
 export { normalizePhone } from "./file-repo";
