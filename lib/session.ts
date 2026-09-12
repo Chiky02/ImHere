@@ -1,6 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { homePath, hasPermission, type Permission } from "./permissions";
+import {
+  defaultPermissions,
+  homePath,
+  hasPermission,
+  type Permission,
+} from "./permissions";
 import type { Role, SessionUser } from "./types";
 
 const COOKIE = "cp_session";
@@ -10,7 +15,16 @@ function secret() {
   return new TextEncoder().encode(raw);
 }
 
+function normalizePermissions(role: Role, raw: unknown): string[] {
+  if (Array.isArray(raw) && raw.length > 0) return raw.map(String);
+  return defaultPermissions(role);
+}
+
 export async function signSession(user: SessionUser) {
+  const permissions =
+    user.permissions?.length > 0
+      ? user.permissions
+      : defaultPermissions(user.role);
   return new SignJWT({
     name: user.name,
     phone: user.phone,
@@ -20,7 +34,7 @@ export async function signSession(user: SessionUser) {
     busetaId: user.busetaId,
     approved: user.approved,
     active: user.active,
-    permissions: user.permissions,
+    permissions,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -35,20 +49,21 @@ export async function readSession(): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, secret());
     if (payload.active === false) return null;
-    const permissions = Array.isArray(payload.permissions)
-      ? payload.permissions.map(String)
-      : [];
+    const role = payload.role as Role;
+    if (role !== "admin" && role !== "operator" && role !== "driver") {
+      return null;
+    }
     return {
       id: String(payload.sub),
       name: String(payload.name ?? ""),
       phone: String(payload.phone ?? ""),
-      role: payload.role as Role,
+      role,
       roleId: payload.roleId ? String(payload.roleId) : undefined,
       roleName: payload.roleName ? String(payload.roleName) : undefined,
       busetaId: payload.busetaId ? String(payload.busetaId) : undefined,
       approved: Boolean(payload.approved),
       active: payload.active !== false,
-      permissions,
+      permissions: normalizePermissions(role, payload.permissions),
     };
   } catch {
     return null;

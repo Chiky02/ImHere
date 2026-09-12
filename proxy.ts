@@ -1,12 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-import { homePath, requiredPermissionForPath } from "@/lib/permissions";
+import {
+  defaultPermissions,
+  requiredPermissionForPath,
+} from "@/lib/permissions";
+import type { Role } from "@/lib/types";
 
 const PUBLIC = ["/login", "/registro"];
 
 function secret() {
   const raw = process.env.SESSION_SECRET || "control-puntos-dev-secret-change-me";
   return new TextEncoder().encode(raw);
+}
+
+function resolvePermissions(role: Role, raw: unknown): string[] {
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map(String);
+  }
+  // Sesiones antiguas sin permisos en el JWT
+  return defaultPermissions(role);
+}
+
+function safeFallbackPath(role: Role, permissions: string[], fromPath: string) {
+  const candidates =
+    role === "admin"
+      ? [
+          "/admin",
+          "/admin/puntos",
+          "/admin/recorridos",
+          "/admin/busetas",
+          "/admin/conductores",
+          "/admin/roles",
+          "/admin/horarios",
+          "/admin/historial",
+          "/admin/configuracion",
+        ]
+      : role === "operator"
+        ? ["/operador", "/operador/sonido"]
+        : ["/conductor"];
+
+  for (const path of candidates) {
+    if (path === fromPath) continue;
+    const need = requiredPermissionForPath(path);
+    if (!need || permissions.includes(need)) return path;
+  }
+  return "/cuenta";
 }
 
 export async function proxy(request: NextRequest) {
@@ -22,17 +60,18 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = request.cookies.get("cp_session")?.value;
-  let role: string | null = null;
+  let role: Role | null = null;
   let permissions: string[] = [];
   let active = true;
   if (token) {
     try {
       const { payload } = await jwtVerify(token, secret());
-      role = String(payload.role ?? "");
-      active = payload.active !== false;
-      permissions = Array.isArray(payload.permissions)
-        ? payload.permissions.map(String)
-        : [];
+      const rawRole = String(payload.role ?? "");
+      if (rawRole === "admin" || rawRole === "operator" || rawRole === "driver") {
+        role = rawRole;
+        active = payload.active !== false;
+        permissions = resolvePermissions(role, payload.permissions);
+      }
     } catch {
       role = null;
     }
@@ -55,7 +94,7 @@ export async function proxy(request: NextRequest) {
 
   if (role && (pathname === "/" || isPublic)) {
     const url = request.nextUrl.clone();
-    url.pathname = homePath(role as "admin" | "operator" | "driver");
+    url.pathname = safeFallbackPath(role, permissions, pathname);
     return NextResponse.redirect(url);
   }
 
@@ -77,8 +116,9 @@ export async function proxy(request: NextRequest) {
 
   const needed = requiredPermissionForPath(pathname);
   if (needed && role && !permissions.includes(needed)) {
+    const dest = safeFallbackPath(role, permissions, pathname);
     const url = request.nextUrl.clone();
-    url.pathname = homePath(role as "admin" | "operator" | "driver");
+    url.pathname = dest === pathname ? "/cuenta" : dest;
     return NextResponse.redirect(url);
   }
 
