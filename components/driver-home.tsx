@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormStatus } from "react-dom";
 import { avisoProximidadAction, markReadAction } from "@/lib/actions";
 import { paginate } from "@/lib/pagination";
 import { ClientPagination } from "./pagination";
@@ -26,6 +27,87 @@ type Note = {
   createdAt: string;
 };
 
+function SubmitLabel({
+  alreadySent,
+  idleLabel,
+}: {
+  alreadySent: boolean;
+  idleLabel: string;
+}) {
+  const { pending } = useFormStatus();
+  if (pending) return <>Enviando aviso…</>;
+  if (alreadySent) return <>Ya avisaste</>;
+  return <>{idleLabel}</>;
+}
+
+function AvisoButton({
+  puntoId,
+  canAlert,
+  pendingAlerta,
+  disabledReason,
+}: {
+  puntoId: string;
+  canAlert: boolean;
+  pendingAlerta: boolean;
+  disabledReason: string | null;
+}) {
+  const router = useRouter();
+  const [state, formAction] = useActionState(
+    async (
+      _prev: { error?: string; ok?: boolean } | null,
+      formData: FormData,
+    ) => {
+      formData.set("puntoId", puntoId);
+      try {
+        const res = await avisoProximidadAction(formData);
+        if (res?.error) return { error: res.error };
+        router.refresh();
+        return { ok: true };
+      } catch {
+        return {
+          error:
+            "No se pudo enviar el aviso. Revisa la conexión e inténtalo de nuevo.",
+        };
+      }
+    },
+    null,
+  );
+
+  const sent = pendingAlerta || Boolean(state?.ok);
+  const blocked = !canAlert || sent;
+
+  return (
+    <div className="mt-4">
+      <form action={formAction}>
+        <button
+          type="submit"
+          className="btn btn-signal w-full py-3 text-base"
+          disabled={blocked}
+          title={disabledReason ?? undefined}
+        >
+          <SubmitLabel
+            alreadySent={sent}
+            idleLabel="Estoy próximo a llegar"
+          />
+        </button>
+      </form>
+      {disabledReason && !sent ? (
+        <p className="mt-2 text-sm text-amber-800">{disabledReason}</p>
+      ) : null}
+      {state?.error ? (
+        <p className="mt-2 rounded-xl bg-orange-50 px-3 py-2 text-sm text-signal">
+          {state.error}
+        </p>
+      ) : null}
+      {state?.ok ? (
+        <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-forest">
+          Aviso enviado. El operador ya puede verlo.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function DriverHome({
   approved,
   busetaCodigo,
@@ -39,11 +121,10 @@ export function DriverHome({
   steps: Step[];
   inbox: Note[];
 }) {
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [inboxPage, setInboxPage] = useState(1);
   const router = useRouter();
   const notes = paginate(inbox, inboxPage, 10);
+  const canAlert = approved && Boolean(busetaCodigo);
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 4000);
@@ -54,12 +135,23 @@ export function DriverHome({
     if (inboxPage > notes.totalPages) setInboxPage(notes.totalPages);
   }, [inboxPage, notes.totalPages]);
 
+  function disabledReason(step: Step) {
+    if (!approved) return "Tu perfil aún no está aprobado.";
+    if (!busetaCodigo) return "Aún no tienes buseta asignada.";
+    if (step.pendingAlerta) return "Ya enviaste el aviso de este punto.";
+    return null;
+  }
+
   return (
     <div className="space-y-5">
       <div className="card p-4 sm:p-5">
         <p className="text-sm text-muted">Tu buseta</p>
-        <p className="display text-3xl sm:text-4xl">{busetaCodigo ?? "Sin asignar"}</p>
-        <p className="mt-1 text-muted">{horarioLabel ?? "Sin horario para hoy"}</p>
+        <p className="display text-3xl sm:text-4xl">
+          {busetaCodigo ?? "Sin asignar"}
+        </p>
+        <p className="mt-1 text-muted">
+          {horarioLabel ?? "Sin horario para hoy"}
+        </p>
         {!approved ? (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm">
             El admin aún debe aprobar tu perfil y asignarte buseta.
@@ -73,8 +165,6 @@ export function DriverHome({
           <PushToggle />
         </div>
       </div>
-
-      {error ? <p className="text-sm text-signal">{error}</p> : null}
 
       <div className="space-y-3">
         {steps.length === 0 ? (
@@ -92,27 +182,19 @@ export function DriverHome({
                   <h2 className="display text-2xl">{s.puntoName}</h2>
                   <p className="text-sm text-muted">{s.puntoAddress}</p>
                   {s.esperado ? (
-                    <p className="mt-1 text-sm">Llegada programada {s.esperado}</p>
+                    <p className="mt-1 text-sm">
+                      Llegada programada {s.esperado}
+                    </p>
                   ) : null}
                 </div>
                 {s.pendingAlerta ? <Badge tone="warn">Aviso enviado</Badge> : null}
               </div>
-              <button
-                className="btn btn-signal mt-4 w-full py-3 text-base"
-                disabled={!approved || s.pendingAlerta || pending}
-                onClick={() =>
-                  start(async () => {
-                    setError(null);
-                    const fd = new FormData();
-                    fd.set("puntoId", s.puntoId);
-                    const res = await avisoProximidadAction(fd);
-                    if (res?.error) setError(res.error);
-                    else router.refresh();
-                  })
-                }
-              >
-                {s.pendingAlerta ? "Ya avisaste" : "Estoy próximo a llegar"}
-              </button>
+              <AvisoButton
+                puntoId={s.puntoId}
+                canAlert={canAlert}
+                pendingAlerta={s.pendingAlerta}
+                disabledReason={disabledReason(s)}
+              />
             </article>
           ))
         )}

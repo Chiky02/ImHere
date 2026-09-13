@@ -521,34 +521,63 @@ export async function changePasswordAction(formData: FormData) {
 }
 
 export async function avisoProximidadAction(formData: FormData) {
-  const session = await driver();
-  if (!session.approved) return { error: "Tu perfil aún no está aprobado por el admin." };
-  const user = await repo.getUserById(session.id);
-  if (!user?.busetaId) return { error: "El admin aún no te asignó una buseta." };
-  const puntoId = String(formData.get("puntoId") ?? "");
-  if (!puntoId) return { error: "Elige el punto al que te acercas." };
-  const pending = (await repo.listAlertas()).find(
-    (a) =>
-      a.conductorId === user.id &&
-      a.puntoId === puntoId &&
-      a.status === "pending",
-  );
-  if (pending) return { error: "Ya avisaste que vas hacia ese punto." };
-  const horarios = await repo.listHorarios();
-  const horario = horarios.find(
-    (h) => h.conductorId === user.id && h.busetaId === user.busetaId && h.active,
-  );
-  await repo.insertAlerta({
-    id: crypto.randomUUID(),
-    puntoId,
-    conductorId: user.id,
-    busetaId: user.busetaId,
-    horarioId: horario?.id,
-    createdAt: nowIso(),
-    status: "pending",
-  });
-  revalidatePath("/conductor");
-  revalidatePath("/operador");
+  try {
+    const session = await readSession();
+    if (!session || session.role !== "driver") {
+      return { error: "Sesión vencida. Cierra la app y vuelve a entrar." };
+    }
+    const user = await repo.getUserById(session.id);
+    if (!user || user.active === false) {
+      return { error: "Tu cuenta no está activa. Habla con el admin." };
+    }
+    // Always trust DB approval (JWT can be stale after admin approval).
+    if (!user.approved) {
+      return { error: "Tu perfil aún no está aprobado por el admin." };
+    }
+    if (!user.busetaId) {
+      return { error: "El admin aún no te asignó una buseta." };
+    }
+    const puntoId = String(formData.get("puntoId") ?? "");
+    if (!puntoId) return { error: "Elige el punto al que te acercas." };
+    const pending = (await repo.listAlertas()).find(
+      (a) =>
+        a.conductorId === user.id &&
+        a.puntoId === puntoId &&
+        a.status === "pending",
+    );
+    if (pending) return { error: "Ya avisaste que vas hacia ese punto." };
+    const horarios = await repo.listHorarios();
+    const horario = horarios.find(
+      (h) =>
+        h.conductorId === user.id &&
+        h.busetaId === user.busetaId &&
+        h.active,
+    );
+    await repo.insertAlerta({
+      id: crypto.randomUUID(),
+      puntoId,
+      conductorId: user.id,
+      busetaId: user.busetaId,
+      horarioId: horario?.id,
+      createdAt: nowIso(),
+      status: "pending",
+    });
+    // Refresh cookie so next loads see approved + buseta immediately.
+    if (
+      session.approved !== user.approved ||
+      session.busetaId !== user.busetaId
+    ) {
+      await setSessionCookie(await buildSessionUser(user));
+    }
+    revalidatePath("/conductor");
+    revalidatePath("/operador");
+    return { ok: true as const };
+  } catch {
+    return {
+      error:
+        "No se pudo enviar el aviso. Revisa la conexión e inténtalo de nuevo.",
+    };
+  }
 }
 
 export async function registrarLlegadaAction(formData: FormData) {

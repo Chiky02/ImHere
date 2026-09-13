@@ -96,19 +96,29 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
 }
 
 export async function driverSnapshot(user: SessionUser) {
-  const [puntos, busetas, horarios, recorridos, alertas, notificaciones] =
-    await Promise.all([
-      repo.listPuntos(),
-      repo.listBusetas(),
-      repo.listHorarios(),
-      repo.listRecorridos(),
-      repo.listAlertas(),
-      repo.listNotificaciones(),
-    ]);
-  const buseta = user.busetaId
-    ? busetas.find((b) => b.id === user.busetaId)
-    : undefined;
-  const horario = horarioHoy(horarios, user.id, user.busetaId);
+  const [
+    dbUser,
+    puntos,
+    busetas,
+    horarios,
+    recorridos,
+    alertas,
+    notificaciones,
+  ] = await Promise.all([
+    repo.getUserById(user.id),
+    repo.listPuntos(),
+    repo.listBusetas(),
+    repo.listHorarios(),
+    repo.listRecorridos(),
+    repo.listAlertas(),
+    repo.listNotificaciones(),
+  ]);
+  // Prefer DB over JWT so approval/buseta changes apply without re-login
+  // (iPhone often keeps a long-lived session cookie).
+  const approved = dbUser?.approved ?? user.approved;
+  const busetaId = dbUser?.busetaId ?? user.busetaId;
+  const buseta = busetaId ? busetas.find((b) => b.id === busetaId) : undefined;
+  const horario = horarioHoy(horarios, user.id, busetaId);
   const recorrido = horario
     ? recorridos.find((r) => r.id === horario.recorridoId)
     : recorridos.find((r) => r.active);
@@ -135,7 +145,18 @@ export async function driverSnapshot(user: SessionUser) {
       };
     });
   const inbox = notificaciones.filter((n) => n.userId === user.id);
-  return { buseta, horario, recorrido, steps, inbox, busetas, puntos };
+  return {
+    dbUser,
+    approved,
+    busetaId,
+    buseta,
+    horario,
+    recorrido,
+    steps,
+    inbox,
+    busetas,
+    puntos,
+  };
 }
 
 export async function adminDashboard() {
