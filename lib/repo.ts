@@ -24,8 +24,12 @@ export const deletePunto = (...a: Parameters<typeof fileRepo.deletePunto>) =>
   impl().deletePunto(...a);
 export const listBusetas = (...a: Parameters<typeof fileRepo.listBusetas>) =>
   impl().listBusetas(...a);
+export const listBusetasAny = (...a: Parameters<typeof fileRepo.listBusetasAny>) =>
+  impl().listBusetasAny(...a);
 export const getBuseta = (...a: Parameters<typeof fileRepo.getBuseta>) =>
   impl().getBuseta(...a);
+export const getBusetaAny = (...a: Parameters<typeof fileRepo.getBusetaAny>) =>
+  impl().getBusetaAny(...a);
 export const upsertBuseta = (...a: Parameters<typeof fileRepo.upsertBuseta>) =>
   impl().upsertBuseta(...a);
 export const deleteBuseta = (...a: Parameters<typeof fileRepo.deleteBuseta>) =>

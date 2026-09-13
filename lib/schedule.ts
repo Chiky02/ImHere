@@ -5,16 +5,24 @@ export function expectedAtPunto(
   horario: Horario,
   recorrido: Recorrido,
   puntoId: string,
+  salidaOverride?: string,
 ) {
+  const base =
+    (salidaOverride && salidaOverride !== "00:00" ? salidaOverride : null) ||
+    (horario.horaSalida && horario.horaSalida !== "00:00" ? horario.horaSalida : null);
+  if (!base) return undefined;
   const ordered = [...recorrido.puntos].sort((a, b) => a.orden - b.orden);
   let acc = 0;
   for (const step of ordered) {
     acc += step.tiempoEsperadoMin;
     if (step.puntoId === puntoId) {
-      return addMinutesToHhmm(horario.horaSalida, acc);
+      return addMinutesToHhmm(base, acc);
     }
   }
-  return horario.horaLlegada;
+  if (horario.horaLlegada && horario.horaLlegada !== "00:00") {
+    return horario.horaLlegada;
+  }
+  return addMinutesToHhmm(base, acc);
 }
 
 export function horarioHoy(
@@ -23,11 +31,12 @@ export function horarioHoy(
   busetaId?: string,
 ) {
   const day = weekdayBogota();
-  return horarios.find(
-    (h) =>
-      h.active &&
-      h.conductorId === conductorId &&
-      (!busetaId || h.busetaId === busetaId) &&
-      (h.dias.length === 0 || h.dias.includes(day)),
+  const activeToday = horarios.filter(
+    (h) => h.active && (h.dias.length === 0 || h.dias.includes(day)),
+  );
+  return (
+    activeToday.find((h) => h.conductorId === conductorId) ||
+    activeToday.find((h) => busetaId && h.busetaId === busetaId) ||
+    activeToday[0]
   );
 }

@@ -25,7 +25,7 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
     await Promise.all([
       repo.listPuntos(),
       repo.listUsers(),
-      repo.listBusetas(),
+      repo.listBusetasAny(),
       repo.listAlertas(),
       repo.listRegistros(),
       repo.listHorarios(),
@@ -48,15 +48,21 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
       const recorrido = horario
         ? recorridos.find((r) => r.id === horario.recorridoId)
         : undefined;
+      const salida =
+        conductor?.salidaHoyFecha === todayDate()
+          ? conductor.salidaHoy
+          : undefined;
       const esperado =
         horario && recorrido
-          ? expectedAtPunto(horario, recorrido, selected.id)
+          ? expectedAtPunto(horario, recorrido, selected.id, salida)
           : undefined;
       return {
         ...a,
         conductorName: conductor?.name ?? "Conductor",
         conductorPhone: conductor?.phone ?? "",
-        busetaCodigo: buseta?.codigo ?? "—",
+        busetaCodigo: buseta
+          ? `${buseta.codigo}${buseta.deletedAt ? " (archivada)" : ""}`
+          : "—",
         esperado,
       };
     });
@@ -76,13 +82,18 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
     const recorrido = horario
       ? recorridos.find((x) => x.id === horario.recorridoId)
       : undefined;
+    const conductor = users.find((u) => u.id === r.conductorId);
+    const salida =
+      conductor?.salidaHoyFecha === todayDate()
+        ? conductor.salidaHoy
+        : undefined;
     const esperado =
       horario && recorrido
-        ? expectedAtPunto(horario, recorrido, selected.id)
+        ? expectedAtPunto(horario, recorrido, selected.id, salida)
         : undefined;
     return {
       ...r,
-      conductorName: users.find((u) => u.id === r.conductorId)?.name ?? "—",
+      conductorName: conductor?.name ?? "—",
       busetaCodigo: busetas.find((b) => b.id === r.busetaId)?.codigo ?? "—",
       llegadaHora: formatTime(r.horaLlegadaReal),
       salidaHora: r.horaSalidaReal ? formatTime(r.horaSalidaReal) : null,
@@ -122,6 +133,8 @@ export async function driverSnapshot(user: SessionUser) {
   const recorrido = horario
     ? recorridos.find((r) => r.id === horario.recorridoId)
     : recorridos.find((r) => r.active);
+  const salidaHoy =
+    dbUser?.salidaHoyFecha === todayDate() ? dbUser.salidaHoy : undefined;
   const steps = (recorrido?.puntos ?? [])
     .slice()
     .sort((a, b) => a.orden - b.orden)
@@ -139,7 +152,7 @@ export async function driverSnapshot(user: SessionUser) {
         puntoAddress: punto?.address ?? "",
         esperado:
           horario && recorrido
-            ? expectedAtPunto(horario, recorrido, step.puntoId)
+            ? expectedAtPunto(horario, recorrido, step.puntoId, salidaHoy)
             : undefined,
         pendingAlerta: Boolean(pending),
       };
@@ -156,6 +169,7 @@ export async function driverSnapshot(user: SessionUser) {
     inbox,
     busetas,
     puntos,
+    salidaHoy,
   };
 }
 
@@ -199,7 +213,7 @@ export async function historialData(opts: {
     await Promise.all([
       repo.listRegistros(),
       repo.listUsers(),
-      repo.listBusetas(),
+      repo.listBusetasAny(),
       repo.listPuntos(),
       repo.listHorarios(),
       repo.listRecorridos(),

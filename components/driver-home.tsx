@@ -3,7 +3,11 @@
 import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
-import { avisoProximidadAction, markReadAction } from "@/lib/actions";
+import {
+  avisoProximidadAction,
+  markReadAction,
+  setSalidaHoyAction,
+} from "@/lib/actions";
 import { paginate } from "@/lib/pagination";
 import { ClientPagination } from "./pagination";
 import { Badge } from "./ui";
@@ -112,12 +116,17 @@ export function DriverHome({
   approved,
   busetaCodigo,
   horarioLabel,
+  salidaHoy,
+  tiempoViajeMin,
   steps,
   inbox,
 }: {
   approved: boolean;
   busetaCodigo?: string;
   horarioLabel?: string;
+  /** HH:MM declared by driver for today (optional) */
+  salidaHoy?: string;
+  tiempoViajeMin?: number;
   steps: Step[];
   inbox: Note[];
 }) {
@@ -150,7 +159,10 @@ export function DriverHome({
           {busetaCodigo ?? "Sin asignar"}
         </p>
         <p className="mt-1 text-muted">
-          {horarioLabel ?? "Sin horario para hoy"}
+          {horarioLabel ??
+            (tiempoViajeMin
+              ? `Plantilla de hoy · ~${tiempoViajeMin} min de viaje`
+              : "Sin plantilla de recorrido para hoy")}
         </p>
         {!approved ? (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm">
@@ -161,6 +173,44 @@ export function DriverHome({
             Ya estás aprobado, pero aún no tienes buseta asignada.
           </p>
         ) : null}
+
+        {approved && busetaCodigo ? (
+          <form action={setSalidaHoyAction as never} className="mt-4 space-y-2 border-t border-line pt-4">
+            <label htmlFor="salidaHoy" className="!normal-case !tracking-normal">
+              Hora de salida de hoy (opcional)
+            </label>
+            <p className="text-xs text-muted">
+              Si la indicas, el sistema estima la llegada a cada punto. Si no, solo
+              usas los avisos de proximidad.
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <input
+                id="salidaHoy"
+                name="salidaHoy"
+                type="time"
+                defaultValue={salidaHoy ?? ""}
+                className="input-compact"
+              />
+              <button className="btn btn-primary text-sm" type="submit">
+                Guardar salida
+              </button>
+              {salidaHoy ? (
+                <button
+                  className="btn btn-ghost text-sm"
+                  type="submit"
+                  name="clear"
+                  value="1"
+                >
+                  Borrar
+                </button>
+              ) : null}
+            </div>
+            {salidaHoy ? (
+              <p className="text-sm text-forest">Salida de hoy: {salidaHoy}</p>
+            ) : null}
+          </form>
+        ) : null}
+
         <div className="mt-4">
           <PushToggle />
         </div>

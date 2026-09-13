@@ -12,7 +12,7 @@ export function PasswordForm() {
   );
 
   return (
-    <form action={formAction} className="card max-w-lg space-y-4 p-4 sm:p-6">
+    <form action={formAction} className="card space-y-4 p-4 sm:p-6">
       <h2 className="display text-xl">Cambiar contraseña</h2>
       {state?.error ? (
         <p className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-signal">{state.error}</p>

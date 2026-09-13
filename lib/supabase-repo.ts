@@ -25,6 +25,8 @@ type UserRow = {
   buseta_id: string | null;
   approved: boolean;
   active?: boolean | null;
+  salida_hoy?: string | null;
+  salida_hoy_fecha?: string | null;
   created_at: string;
   deleted_at?: string | null;
 };
@@ -40,6 +42,8 @@ function mapUser(row: UserRow): User {
     busetaId: row.buseta_id ?? undefined,
     approved: row.approved,
     active: row.active !== false,
+    salidaHoy: row.salida_hoy ?? undefined,
+    salidaHoyFecha: row.salida_hoy_fecha ?? undefined,
     createdAt: row.created_at,
     deletedAt: row.deleted_at ?? undefined,
   };
@@ -56,6 +60,8 @@ function userRow(user: User) {
     buseta_id: user.busetaId ?? null,
     approved: user.approved,
     active: user.active !== false,
+    salida_hoy: user.salidaHoy ?? null,
+    salida_hoy_fecha: user.salidaHoyFecha ?? null,
     created_at: user.createdAt,
   };
 }
@@ -177,12 +183,47 @@ export async function listBusetas() {
   );
 }
 
+export async function listBusetasAny() {
+  const { data, error } = await supabaseAdmin()
+    .from("busetas")
+    .select("*")
+    .order("codigo");
+  if (error) throw error;
+  return (data ?? []).map(
+    (b): Buseta => ({
+      id: b.id,
+      codigo: b.codigo,
+      placa: b.placa ?? "",
+      active: b.active,
+      deletedAt: b.deleted_at ?? undefined,
+    }),
+  );
+}
+
 export async function getBuseta(id: string) {
   const { data, error } = await supabaseAdmin()
     .from("busetas")
     .select("*")
     .eq("id", id)
     .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return undefined;
+  return {
+    id: data.id,
+    codigo: data.codigo,
+    placa: data.placa ?? "",
+    active: data.active,
+    deletedAt: data.deleted_at ?? undefined,
+  } satisfies Buseta;
+}
+
+/** Includes soft-deleted busetas (for historial / labels). */
+export async function getBusetaAny(id: string) {
+  const { data, error } = await supabaseAdmin()
+    .from("busetas")
+    .select("*")
+    .eq("id", id)
     .maybeSingle();
   if (error) throw error;
   if (!data) return undefined;
@@ -296,10 +337,10 @@ export async function listHorarios() {
     (h): Horario => ({
       id: h.id,
       recorridoId: h.recorrido_id,
-      busetaId: h.buseta_id,
-      conductorId: h.conductor_id,
-      horaSalida: h.hora_salida,
-      horaLlegada: h.hora_llegada,
+      busetaId: h.buseta_id ?? undefined,
+      conductorId: h.conductor_id ?? undefined,
+      horaSalida: h.hora_salida ?? "00:00",
+      horaLlegada: h.hora_llegada ?? "00:00",
       tiempoViajeMin: h.tiempo_viaje_min,
       dias: h.dias ?? [],
       active: h.active,
@@ -312,10 +353,10 @@ export async function upsertHorario(horario: Horario) {
   const { error } = await supabaseAdmin().from("horarios").upsert({
     id: horario.id,
     recorrido_id: horario.recorridoId,
-    buseta_id: horario.busetaId,
-    conductor_id: horario.conductorId,
-    hora_salida: horario.horaSalida,
-    hora_llegada: horario.horaLlegada,
+    buseta_id: horario.busetaId ?? null,
+    conductor_id: horario.conductorId ?? null,
+    hora_salida: horario.horaSalida || "00:00",
+    hora_llegada: horario.horaLlegada || "00:00",
     tiempo_viaje_min: horario.tiempoViajeMin,
     dias: horario.dias,
     active: horario.active,

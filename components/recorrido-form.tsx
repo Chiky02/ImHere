@@ -18,19 +18,27 @@ export function RecorridoForm({
   );
 
   return (
-    <form action={saveRecorridoAction} className="card space-y-4 p-5">
+    <form action={saveRecorridoAction} className="space-y-3">
       {recorrido ? <input type="hidden" name="id" value={recorrido.id} /> : null}
-      <div>
-        <label>Nombre del recorrido</label>
-        <input name="name" required defaultValue={recorrido?.name} placeholder="Ruta Sur" />
+      <div className="form-grid-compact">
+        <div className="sm:col-span-2">
+          <label>Nombre del recorrido</label>
+          <input
+            name="name"
+            required
+            defaultValue={recorrido?.name}
+            placeholder="Ruta Sur"
+            className="input-compact w-full max-w-md"
+          />
+        </div>
       </div>
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Puntos en orden · minutos desde el anterior (o desde la salida)
+          Puntos · minutos desde el anterior
         </p>
         {rows.map((row, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
-            <span className="w-6 text-sm text-muted">{i + 1}.</span>
+            <span className="w-5 text-sm text-muted">{i + 1}.</span>
             <select
               name="puntoId"
               value={row.puntoId}
@@ -39,7 +47,7 @@ export function RecorridoForm({
                 next[i] = { ...next[i], puntoId: e.target.value };
                 setRows(next);
               }}
-              className="max-w-xs"
+              className="input-compact max-w-[14rem]"
             >
               {puntos.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -57,7 +65,7 @@ export function RecorridoForm({
                 next[i] = { ...next[i], tiempoEsperadoMin: Number(e.target.value) };
                 setRows(next);
               }}
-              className="w-24"
+              className="input-compact w-20"
             />
             <span className="text-sm text-muted">min</span>
             {rows.length > 1 ? (
@@ -89,7 +97,7 @@ export function RecorridoForm({
         </button>
       </div>
       <button className="btn btn-primary" type="submit">
-        {recorrido ? "Actualizar recorrido" : "Crear recorrido"}
+        {recorrido ? "Guardar cambios" : "Crear recorrido"}
       </button>
     </form>
   );

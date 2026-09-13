@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { IconTrash } from "@/components/action-icons";
 import { ConfirmForm } from "@/components/confirm-form";
+import { ListToolbar } from "@/components/list-toolbar";
 import { PaginationNav } from "@/components/pagination";
 import { PageTitle } from "@/components/ui";
 import { deleteHorarioAction, saveHorarioAction } from "@/lib/actions";
-import { paginate, parsePage } from "@/lib/pagination";
+import { listQuery } from "@/lib/list-query";
 import * as repo from "@/lib/repo";
 import { readSession } from "@/lib/session";
 import { DIA_LABELS } from "@/lib/time";
@@ -12,7 +14,7 @@ import { DIA_LABELS } from "@/lib/time";
 export default async function HorariosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; sort?: string }>;
 }) {
   const user = await readSession();
   if (!user || user.role !== "admin") redirect("/login");
@@ -24,63 +26,100 @@ export default async function HorariosPage({
     repo.listUsers(),
   ]);
   const drivers = users.filter((u) => u.role === "driver" && u.approved);
-  const sorted = [...horarios].sort((a, b) =>
-    a.horaSalida.localeCompare(b.horaSalida),
-  );
-  const list = paginate(sorted, parsePage(sp.page), 15);
+  const rows = horarios.map((h) => {
+    const recorrido = recorridos.find((r) => r.id === h.recorridoId)?.name ?? "";
+    const buseta = h.busetaId
+      ? busetas.find((b) => b.id === h.busetaId)?.codigo ?? ""
+      : "";
+    const conductor = h.conductorId
+      ? users.find((u) => u.id === h.conductorId)?.name ?? ""
+      : "";
+    return {
+      ...h,
+      recorridoName: recorrido,
+      busetaCodigo: buseta,
+      conductorName: conductor,
+      diasLabel: h.dias.map((d) => DIA_LABELS[d]).join(" "),
+    };
+  });
+  const list = listQuery(rows, {
+    q: sp.q,
+    sort: sp.sort as "asc" | "desc" | undefined,
+    page: sp.page,
+    pageSize: 12,
+    fields: (h) => [
+      h.recorridoName,
+      h.busetaCodigo,
+      h.conductorName,
+      h.diasLabel,
+      String(h.tiempoViajeMin),
+    ],
+    sortKey: (h) => h.recorridoName || h.id,
+  });
+
   return (
     <AppShell user={user}>
       <PageTitle
         title="Horarios"
-        subtitle="Salida, llegada y tiempo de viaje por conductor y buseta."
+        subtitle="Plantilla por recorrido y días. La salida la puede indicar el conductor el día del viaje; buseta y conductor son opcionales (rotativos)."
       />
-      <form action={saveHorarioAction} className="card mb-6 grid gap-3 p-5 md:grid-cols-3">
-        <div className="md:col-span-3">
-          <h2 className="display text-xl">Nuevo horario</h2>
+
+      <form action={saveHorarioAction as never} className="card mb-6 space-y-3 p-4 sm:p-5">
+        <h2 className="display text-xl">Nueva plantilla</h2>
+        <div className="form-grid-compact">
+          <div className="sm:col-span-2">
+            <label>Recorrido</label>
+            <select name="recorridoId" required className="input-compact w-full max-w-xs">
+              {recorridos.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Tiempo de viaje (min)</label>
+            <input
+              name="tiempoViajeMin"
+              type="number"
+              min={1}
+              defaultValue={100}
+              className="input-compact w-24"
+              required
+            />
+          </div>
+          <div>
+            <label>Buseta (opcional)</label>
+            <select name="busetaId" defaultValue="" className="input-compact max-w-[8rem]">
+              <option value="">Rotativa</option>
+              {busetas.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.codigo}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Conductor (opcional)</label>
+            <select name="conductorId" defaultValue="" className="input-compact max-w-[12rem]">
+              <option value="">Rotativo</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Salida ref. (opcional)</label>
+            <input name="horaSalida" type="time" className="input-compact" />
+          </div>
+          <div>
+            <label>Llegada ref. (opcional)</label>
+            <input name="horaLlegada" type="time" className="input-compact" />
+          </div>
         </div>
         <div>
-          <label>Recorrido</label>
-          <select name="recorridoId" required>
-            {recorridos.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label>Buseta</label>
-          <select name="busetaId" required>
-            {busetas.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.codigo}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label>Conductor</label>
-          <select name="conductorId" required>
-            {drivers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label>Hora de salida</label>
-          <input name="horaSalida" type="time" required defaultValue="05:30" />
-        </div>
-        <div>
-          <label>Hora de llegada</label>
-          <input name="horaLlegada" type="time" required defaultValue="07:10" />
-        </div>
-        <div>
-          <label>Tiempo de viaje (min)</label>
-          <input name="tiempoViajeMin" type="number" min={1} defaultValue={100} />
-        </div>
-        <div className="md:col-span-3">
           <label>Días</label>
           <div className="flex flex-wrap gap-3">
             {DIA_LABELS.map((label, i) => (
@@ -100,59 +139,79 @@ export default async function HorariosPage({
             ))}
           </div>
         </div>
-        <div>
-          <button className="btn btn-primary" type="submit">
-            Guardar horario
-          </button>
-        </div>
+        <button className="btn btn-primary" type="submit">
+          Guardar plantilla
+        </button>
       </form>
-      <div className="card overflow-x-auto p-2">
-        <table>
-          <thead>
-            <tr>
-              <th>Conductor</th>
-              <th>Buseta</th>
-              <th>Recorrido</th>
-              <th>Sale / Llega</th>
-              <th>Días</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((h) => (
-              <tr key={h.id}>
-                <td>{users.find((u) => u.id === h.conductorId)?.name}</td>
-                <td>{busetas.find((b) => b.id === h.busetaId)?.codigo}</td>
-                <td>{recorridos.find((r) => r.id === h.recorridoId)?.name}</td>
-                <td>
-                  {h.horaSalida} → {h.horaLlegada} ({h.tiempoViajeMin} min)
-                </td>
-                <td>{h.dias.map((d) => DIA_LABELS[d]).join(" ")}</td>
-                <td>
-                  <ConfirmForm
-                    action={deleteHorarioAction}
-                    title="¿Quitar este horario?"
-                    message="El horario quedará archivado (borrado lógico)."
-                    confirmLabel="Quitar"
-                  >
-                    <input type="hidden" name="id" value={h.id} />
-                    <button className="text-sm text-signal" type="submit">
-                      Quitar
-                    </button>
-                  </ConfirmForm>
-                </td>
+
+      <div className="card p-4 sm:p-5">
+        <h2 className="display mb-3 text-xl">Listado</h2>
+        <ListToolbar
+          path="/admin/horarios"
+          q={list.q}
+          sort={list.sort}
+          placeholder="Buscar recorrido, buseta, conductor…"
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full max-w-5xl">
+            <thead>
+              <tr>
+                <th>Recorrido</th>
+                <th>Viaje</th>
+                <th>Buseta</th>
+                <th>Conductor</th>
+                <th>Días</th>
+                <th className="w-16"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((h) => (
+                <tr key={h.id}>
+                  <td className="font-semibold">{h.recorridoName || "—"}</td>
+                  <td>
+                    {h.tiempoViajeMin} min
+                    {h.horaSalida && h.horaSalida !== "00:00" ? (
+                      <span className="block text-xs text-muted">
+                        Ref. {h.horaSalida}
+                        {h.horaLlegada && h.horaLlegada !== "00:00"
+                          ? ` → ${h.horaLlegada}`
+                          : ""}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>{h.busetaCodigo || "Rotativa"}</td>
+                  <td>{h.conductorName || "Rotativo"}</td>
+                  <td className="text-sm">{h.diasLabel}</td>
+                  <td>
+                    <ConfirmForm
+                      action={deleteHorarioAction}
+                      title="¿Quitar esta plantilla?"
+                      message="Quedará archivada (borrado lógico)."
+                      confirmLabel="Quitar"
+                    >
+                      <input type="hidden" name="id" value={h.id} />
+                      <button type="submit" className="icon-btn danger" title="Eliminar">
+                        <IconTrash />
+                      </button>
+                    </ConfirmForm>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <PaginationNav
+          path="/admin/horarios"
+          page={list.page}
+          totalPages={list.totalPages}
+          total={list.total}
+          params={{
+            q: list.q || undefined,
+            sort: list.sort === "desc" ? "desc" : undefined,
+          }}
+          label="horarios"
+        />
       </div>
-      <PaginationNav
-        path="/admin/horarios"
-        page={list.page}
-        totalPages={list.totalPages}
-        total={list.total}
-        label="horarios"
-      />
     </AppShell>
   );
 }

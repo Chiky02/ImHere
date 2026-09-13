@@ -32,7 +32,8 @@ values
     'admin',
     array[
       'manage.dashboard','manage.puntos','manage.recorridos','manage.busetas',
-      'manage.personas','manage.horarios','manage.historial','manage.config','manage.roles'
+      'manage.personas','manage.horarios','manage.historial','manage.config','manage.roles',
+      'operador.panel','operador.sonido'
     ],
     true
   ),

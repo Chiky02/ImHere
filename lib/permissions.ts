@@ -71,12 +71,12 @@ export const PERMISSION_CATALOG: Record<Permission, PermissionMeta> = {
   "operador.panel": {
     label: "Panel del punto",
     description: "Registrar llegadas y salidas",
-    homes: ["operator"],
+    homes: ["operator", "admin"],
   },
   "operador.sonido": {
     label: "Sonido del operador",
     description: "Configurar alarma personal",
-    homes: ["operator"],
+    homes: ["operator", "admin"],
   },
   "conductor.avisar": {
     label: "Avisar proximidad",
@@ -169,6 +169,7 @@ export function navLinksForUser(user: SessionUser): NavLink[] {
       { href: "/admin/horarios", label: "Horarios", permission: "manage.horarios" },
       { href: "/admin/historial", label: "Historial", permission: "manage.historial" },
       { href: "/admin/configuracion", label: "Config", permission: "manage.config" },
+      { href: "/operador", label: "Panel punto", permission: "operador.panel" },
     ];
     for (const l of admin) {
       if (!l.permission || hasPermission(user, l.permission)) links.push(l);

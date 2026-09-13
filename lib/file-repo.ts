@@ -67,9 +67,17 @@ export async function listBusetas() {
   return (await readDb()).busetas.filter((b) => !b.deletedAt);
 }
 
+export async function listBusetasAny() {
+  return (await readDb()).busetas;
+}
+
 export async function getBuseta(id: string) {
   const b = (await readDb()).busetas.find((b) => b.id === id);
   return b && !b.deletedAt ? b : undefined;
+}
+
+export async function getBusetaAny(id: string) {
+  return (await readDb()).busetas.find((b) => b.id === id);
 }
 
 export async function upsertBuseta(buseta: Buseta) {

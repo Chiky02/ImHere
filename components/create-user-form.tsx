@@ -45,56 +45,73 @@ export function CreateUserForm({
       ) : null}
       <input type="hidden" name="approved" value="on" />
       <input type="hidden" name="active" value="on" />
-      <div>
-        <label htmlFor="cu-name">Nombre</label>
-        <input id="cu-name" name="name" required minLength={2} />
-      </div>
-      <div>
-        <label htmlFor="cu-phone">Celular (10+ dígitos)</label>
-        <input id="cu-phone" name="phone" required inputMode="numeric" minLength={10} />
-      </div>
-      <div>
-        <label htmlFor="cu-role">Rol</label>
-        <select id="cu-role" name="roleId" defaultValue={defaultRole} required>
-          {roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label htmlFor="cu-buseta">Buseta (si aplica)</label>
-        <select id="cu-buseta" name="busetaId" defaultValue="">
-          <option value="">—</option>
-          {busetas.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.codigo}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label htmlFor="cu-pass">Contraseña inicial</label>
-        <input
-          id="cu-pass"
-          name="password"
-          type="password"
-          minLength={6}
-          required
-          autoComplete="new-password"
-        />
-      </div>
-      <div>
-        <label htmlFor="cu-pass2">Confirmar contraseña</label>
-        <input
-          id="cu-pass2"
-          name="passwordConfirm"
-          type="password"
-          minLength={6}
-          required
-          autoComplete="new-password"
-        />
+      <div className="form-grid-compact">
+        <div>
+          <label htmlFor="cu-name">Nombre</label>
+          <input id="cu-name" name="name" required minLength={2} className="input-compact w-full" />
+        </div>
+        <div>
+          <label htmlFor="cu-phone">Celular (10+ dígitos)</label>
+          <input
+            id="cu-phone"
+            name="phone"
+            required
+            inputMode="numeric"
+            minLength={10}
+            className="input-compact w-full"
+          />
+        </div>
+        <div>
+          <label htmlFor="cu-role">Rol</label>
+          <select
+            id="cu-role"
+            name="roleId"
+            defaultValue={defaultRole}
+            required
+            className="input-compact w-full"
+          >
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="cu-buseta">Buseta (si aplica)</label>
+          <select id="cu-buseta" name="busetaId" defaultValue="" className="input-compact w-full">
+            <option value="">—</option>
+            {busetas.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.codigo}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="cu-pass">Contraseña inicial</label>
+          <input
+            id="cu-pass"
+            name="password"
+            type="password"
+            minLength={6}
+            required
+            autoComplete="new-password"
+            className="input-compact w-full"
+          />
+        </div>
+        <div>
+          <label htmlFor="cu-pass2">Confirmar contraseña</label>
+          <input
+            id="cu-pass2"
+            name="passwordConfirm"
+            type="password"
+            minLength={6}
+            required
+            autoComplete="new-password"
+            className="input-compact w-full"
+          />
+        </div>
       </div>
       <button className="btn btn-primary w-full sm:w-auto" type="submit" disabled={pending}>
         {pending ? "Creando…" : "Crear"}

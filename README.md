@@ -51,6 +51,7 @@ Configured in the app: **Admin → Config** (`/admin/configuracion`).
    - `supabase/migrations/003_soft_delete_and_alert.sql`
    - `supabase/migrations/004_registro_descripcion.sql`
    - `supabase/migrations/005_roles_permissions.sql`
+   - `supabase/migrations/006_flexible_schedules.sql` — salida del conductor, horarios flexibles, admin con panel operador
    - (optional) `supabase/seed.sql` — demo users
 3. In **Project Settings → API**, copy:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`

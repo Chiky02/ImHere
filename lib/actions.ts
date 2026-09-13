@@ -203,22 +203,27 @@ export async function deleteRecorridoAction(formData: FormData) {
 export async function saveHorarioAction(formData: FormData) {
   await admin();
   const dias = formData.getAll("dias").map((d) => Number(d));
+  const busetaId = String(formData.get("busetaId") ?? "") || undefined;
+  const conductorId = String(formData.get("conductorId") ?? "") || undefined;
+  const horaSalida = String(formData.get("horaSalida") ?? "").trim() || "00:00";
+  const horaLlegada = String(formData.get("horaLlegada") ?? "").trim() || "00:00";
   const horario: Horario = {
     id: String(formData.get("id") ?? "") || crypto.randomUUID(),
     recorridoId: String(formData.get("recorridoId") ?? ""),
-    busetaId: String(formData.get("busetaId") ?? ""),
-    conductorId: String(formData.get("conductorId") ?? ""),
-    horaSalida: String(formData.get("horaSalida") ?? ""),
-    horaLlegada: String(formData.get("horaLlegada") ?? ""),
+    busetaId,
+    conductorId,
+    horaSalida,
+    horaLlegada,
     tiempoViajeMin: Number(formData.get("tiempoViajeMin") || 0),
     dias: dias.length ? dias : [1, 2, 3, 4, 5, 6],
     active: formData.get("active") !== "off",
   };
-  if (!horario.recorridoId || !horario.busetaId || !horario.conductorId) {
-    return;
+  if (!horario.recorridoId) {
+    return { error: "Selecciona un recorrido." };
   }
   await repo.upsertHorario(horario);
   revalidatePath("/admin/horarios");
+  return { ok: true };
 }
 
 export async function deleteHorarioAction(formData: FormData) {
@@ -430,12 +435,37 @@ export async function setOwnBusetaAction(formData: FormData) {
       return { error: "Buseta no válida." };
     }
   }
-  user.busetaId = busetaId || undefined;
-  await repo.upsertUser(user);
-  await setSessionCookie(await buildSessionUser(user));
+  await claimBusetaExclusive(user.id, busetaId || undefined);
+  const refreshed = await repo.getUserById(session.id);
+  if (refreshed) await setSessionCookie(await buildSessionUser(refreshed));
   revalidatePath("/cuenta");
   revalidatePath("/conductor");
-  return { ok: true, message: "Buseta actualizada." };
+  revalidatePath("/admin/busetas");
+  return { ok: true, message: "Buseta actualizada. Si otro conductor la tenía, quedó liberada." };
+}
+
+export async function setSalidaHoyAction(formData: FormData) {
+  const session = await readSession();
+  if (!session || session.role !== "driver") {
+    return { error: "No autorizado." };
+  }
+  const user = await repo.getUserById(session.id);
+  if (!user) return { error: "Usuario no encontrado." };
+  const { todayDate } = await import("./time");
+  const clear = formData.get("clear") === "1";
+  const raw = clear ? "" : String(formData.get("salidaHoy") ?? "").trim();
+  if (!raw) {
+    user.salidaHoy = undefined;
+    user.salidaHoyFecha = undefined;
+  } else {
+    user.salidaHoy = raw;
+    user.salidaHoyFecha = todayDate();
+  }
+  await repo.upsertUser(user);
+  await setSessionCookie(await buildSessionUser(user));
+  revalidatePath("/conductor");
+  revalidatePath("/cuenta");
+  return { ok: true, message: raw ? `Salida registrada: ${raw}` : "Salida borrada." };
 }
 
 export async function deleteUserAction(formData: FormData) {
@@ -462,9 +492,10 @@ export async function approveDriverAction(formData: FormData) {
   if (!user) return;
   user.approved = true;
   const busetaId = String(formData.get("busetaId") ?? "");
-  if (busetaId) user.busetaId = busetaId;
   await repo.upsertUser(user);
+  if (busetaId) await claimBusetaExclusive(user.id, busetaId);
   revalidatePath("/admin/conductores");
+  revalidatePath("/admin/busetas");
 }
 
 export async function assignBusetaAction(formData: FormData) {
@@ -472,11 +503,51 @@ export async function assignBusetaAction(formData: FormData) {
   const user = await repo.getUserById(String(formData.get("id")));
   if (!user || user.role !== "driver") return;
   const busetaId = String(formData.get("busetaId") ?? "");
-  user.busetaId = busetaId || undefined;
-  await repo.upsertUser(user);
+  await claimBusetaExclusive(user.id, busetaId || undefined);
   revalidatePath("/admin/conductores");
+  revalidatePath("/admin/busetas");
   revalidatePath("/conductor");
   revalidatePath("/conductor/perfil");
+}
+
+/** Assign/clear driver from the busetas table (driverId + busetaId). */
+export async function assignDriverToBusetaAction(formData: FormData) {
+  await admin();
+  const driverId = String(formData.get("driverId") ?? "");
+  const busetaId = String(formData.get("busetaId") ?? "");
+  if (!busetaId) return { error: "Buseta no válida." };
+  if (!driverId) {
+    const users = await repo.listUsers();
+    for (const u of users) {
+      if (u.busetaId === busetaId) {
+        u.busetaId = undefined;
+        await repo.upsertUser(u);
+      }
+    }
+  } else {
+    await claimBusetaExclusive(driverId, busetaId);
+  }
+  revalidatePath("/admin/busetas");
+  revalidatePath("/admin/conductores");
+  revalidatePath("/conductor");
+  return { ok: true };
+}
+
+/** One active driver per buseta: clears previous owners. */
+async function claimBusetaExclusive(userId: string, busetaId?: string) {
+  const users = await repo.listUsers();
+  if (busetaId) {
+    for (const u of users) {
+      if (u.busetaId === busetaId && u.id !== userId) {
+        u.busetaId = undefined;
+        await repo.upsertUser(u);
+      }
+    }
+  }
+  const user = users.find((u) => u.id === userId) ?? (await repo.getUserById(userId));
+  if (!user) return;
+  user.busetaId = busetaId;
+  await repo.upsertUser(user);
 }
 
 export async function updateProfileAction(formData: FormData) {

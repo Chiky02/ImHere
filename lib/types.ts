@@ -23,6 +23,9 @@ export type User = {
   approved: boolean;
   /** If false, login is blocked */
   active: boolean;
+  /** Optional departure time (HH:MM) declared by driver for today */
+  salidaHoy?: string;
+  salidaHoyFecha?: string;
   createdAt: string;
   deletedAt?: string;
 };
@@ -61,8 +64,8 @@ export type Buseta = {
 export type Horario = {
   id: string;
   recorridoId: string;
-  busetaId: string;
-  conductorId: string;
+  busetaId?: string;
+  conductorId?: string;
   horaSalida: string;
   horaLlegada: string;
   tiempoViajeMin: number;

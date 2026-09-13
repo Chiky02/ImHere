@@ -22,16 +22,30 @@ export default async function CuentaPage() {
   return (
     <AppShell user={session}>
       <PageTitle title="Tu cuenta" subtitle="Datos personales, buseta y contraseña." />
-      <div className="space-y-5">
-        <form action={updateProfileAction} className="card max-w-lg space-y-4 p-4 sm:p-6">
+      <div className="stack-cards wide">
+        <form action={updateProfileAction} className="card space-y-4 p-4 sm:p-6">
           <h2 className="display text-xl">Datos</h2>
-          <div>
-            <label htmlFor="name">Nombre</label>
-            <input id="name" name="name" defaultValue={user.name} required />
-          </div>
-          <div>
-            <label htmlFor="phone">Celular</label>
-            <input id="phone" name="phone" defaultValue={user.phone} required />
+          <div className="form-grid-compact">
+            <div>
+              <label htmlFor="name">Nombre</label>
+              <input
+                id="name"
+                name="name"
+                defaultValue={user.name}
+                required
+                className="input-compact w-full"
+              />
+            </div>
+            <div>
+              <label htmlFor="phone">Celular</label>
+              <input
+                id="phone"
+                name="phone"
+                defaultValue={user.phone}
+                required
+                className="input-compact w-full"
+              />
+            </div>
           </div>
           {user.role === "driver" && !canPickBuseta ? (
             <div>
@@ -54,12 +68,12 @@ export default async function CuentaPage() {
         {canPickBuseta ? (
           <form
             action={setOwnBusetaAction as never}
-            className="card max-w-lg space-y-4 p-4 sm:p-6"
+            className="card space-y-4 p-4 sm:p-6"
           >
             <h2 className="display text-xl">Buseta que estás usando</h2>
             <p className="text-sm text-muted">
-              Si cambias de vehículo, elige aquí el número. El operador lo verá
-              al recibir tu aviso.
+              Si otro conductor la tenía, queda liberado al guardar. El operador
+              verá este número en tus avisos.
             </p>
             <div>
               <label htmlFor="busetaId">Buseta</label>
@@ -68,6 +82,7 @@ export default async function CuentaPage() {
                 name="busetaId"
                 defaultValue={user.busetaId ?? ""}
                 required
+                className="input-compact w-full max-w-xs"
               >
                 <option value="">Selecciona…</option>
                 {busetas
@@ -85,7 +100,9 @@ export default async function CuentaPage() {
           </form>
         ) : null}
 
-        <PasswordForm />
+        <div className={canPickBuseta ? "md:col-span-2" : undefined}>
+          <PasswordForm />
+        </div>
       </div>
     </AppShell>
   );

@@ -22,6 +22,11 @@ export default async function ConductorPage() {
     await setSessionCookie(await buildSessionUser(snap.dbUser));
   }
 
+  const refSalida =
+    snap.horario?.horaSalida && snap.horario.horaSalida !== "00:00"
+      ? snap.horario.horaSalida
+      : undefined;
+
   return (
     <AppShell user={{ ...user, approved: snap.approved, busetaId: snap.busetaId }}>
       <PageTitle title={`Hola, ${user.name.split(" ")[0]}`} />
@@ -29,10 +34,18 @@ export default async function ConductorPage() {
         approved={snap.approved}
         busetaCodigo={snap.buseta?.codigo}
         horarioLabel={
-          snap.horario
-            ? `Sale ${snap.horario.horaSalida} · llega ${snap.horario.horaLlegada} · ${snap.horario.tiempoViajeMin} min`
+          snap.recorrido
+            ? `Recorrido ${snap.recorrido.name}${
+                snap.salidaHoy
+                  ? ` · saliste a las ${snap.salidaHoy}`
+                  : refSalida
+                    ? ` · ref. ${refSalida}`
+                    : ""
+              }`
             : undefined
         }
+        salidaHoy={snap.salidaHoy}
+        tiempoViajeMin={snap.horario?.tiempoViajeMin}
         steps={snap.steps}
         inbox={snap.inbox}
       />
