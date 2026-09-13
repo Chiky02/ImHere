@@ -23,6 +23,7 @@ type UserRow = {
   role: Role;
   role_id?: string | null;
   buseta_id: string | null;
+  punto_id?: string | null;
   approved: boolean;
   active?: boolean | null;
   salida_hoy?: string | null;
@@ -40,6 +41,7 @@ function mapUser(row: UserRow): User {
     role: row.role,
     roleId: row.role_id ?? undefined,
     busetaId: row.buseta_id ?? undefined,
+    puntoId: row.punto_id ?? undefined,
     approved: row.approved,
     active: row.active !== false,
     salidaHoy: row.salida_hoy ?? undefined,
@@ -58,6 +60,7 @@ function userRow(user: User) {
     role: user.role,
     role_id: user.roleId ?? null,
     buseta_id: user.busetaId ?? null,
+    punto_id: user.puntoId ?? null,
     approved: user.approved,
     active: user.active !== false,
     salida_hoy: user.salidaHoy ?? null,
@@ -112,6 +115,7 @@ export async function listPuntos() {
     .from("puntos")
     .select("*")
     .is("deleted_at", null)
+    .order("numero", { ascending: true, nullsFirst: false })
     .order("name");
   if (error) throw error;
   const { data: ops, error: opErr } = await sb.from("punto_operadores").select("*");
@@ -127,6 +131,7 @@ export async function listPuntos() {
       id: p.id,
       name: p.name,
       address: p.address ?? "",
+      numero: p.numero ?? undefined,
       active: p.active,
       operatorIds: byPunto.get(p.id) ?? [],
       deletedAt: p.deleted_at ?? undefined,
@@ -144,6 +149,7 @@ export async function upsertPunto(punto: Punto) {
     id: punto.id,
     name: punto.name,
     address: punto.address,
+    numero: punto.numero ?? null,
     active: punto.active,
   });
   if (error) throw error;

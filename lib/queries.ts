@@ -21,8 +21,9 @@ function isToday(iso: string) {
 }
 
 export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
-  const [puntos, users, busetas, alertas, registros, horarios, recorridos] =
+  const [dbUser, puntos, users, busetas, alertas, registros, horarios, recorridos] =
     await Promise.all([
+      repo.getUserById(user.id),
       repo.listPuntos(),
       repo.listUsers(),
       repo.listBusetasAny(),
@@ -31,13 +32,34 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
       repo.listHorarios(),
       repo.listRecorridos(),
     ]);
-  const myPuntos =
-    user.role === "admin"
-      ? puntos.filter((p) => p.active)
-      : puntos.filter((p) => p.active && p.operatorIds.includes(user.id));
-  const selected = myPuntos.find((p) => p.id === puntoId) ?? myPuntos[0];
+  const assignedId = dbUser?.puntoId ?? user.puntoId;
+  const activePuntos = puntos.filter((p) => p.active);
+  let myPuntos = activePuntos;
+  if (assignedId) {
+    const assigned = activePuntos.find((p) => p.id === assignedId);
+    myPuntos = assigned
+      ? [assigned]
+      : user.role === "admin"
+        ? activePuntos
+        : activePuntos.filter((p) => p.operatorIds.includes(user.id));
+  } else if (user.role !== "admin") {
+    myPuntos = activePuntos.filter((p) => p.operatorIds.includes(user.id));
+  }
+  // Prefer assigned punto; ignore query switcher when assigned
+  const selected = assignedId
+    ? myPuntos.find((p) => p.id === assignedId) ?? myPuntos[0]
+    : myPuntos.find((p) => p.id === puntoId) ?? myPuntos[0];
+  const lockedToPunto = Boolean(assignedId && selected?.id === assignedId);
   if (!selected) {
-    return { myPuntos, selected: null, incoming: [], waitingSalida: [], bitacora: [] };
+    return {
+      myPuntos,
+      selected: null,
+      incoming: [],
+      waitingSalida: [],
+      bitacora: [],
+      lockedToPunto,
+      needsPuntoAssignment: !assignedId,
+    };
   }
   const incoming = alertas
     .filter((a) => a.puntoId === selected.id && a.status === "pending")
@@ -103,7 +125,15 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
         : null,
     };
   });
-  return { myPuntos, selected, incoming, waitingSalida, bitacora };
+  return {
+    myPuntos,
+    selected,
+    incoming,
+    waitingSalida,
+    bitacora,
+    lockedToPunto,
+    needsPuntoAssignment: !assignedId,
+  };
 }
 
 export async function driverSnapshot(user: SessionUser) {
@@ -140,23 +170,29 @@ export async function driverSnapshot(user: SessionUser) {
     .sort((a, b) => a.orden - b.orden)
     .map((step) => {
       const punto = puntos.find((p) => p.id === step.puntoId);
-      const pending = alertas.find(
+      const todayAlert = alertas.find(
         (a) =>
           a.conductorId === user.id &&
           a.puntoId === step.puntoId &&
-          a.status === "pending",
+          (a.status === "pending" || a.status === "arrived") &&
+          isToday(a.createdAt),
       );
+      const pending = todayAlert?.status === "pending";
+      const done = Boolean(todayAlert);
       return {
         ...step,
         puntoName: punto?.name ?? "Punto",
         puntoAddress: punto?.address ?? "",
+        puntoNumero: punto?.numero,
         esperado:
           horario && recorrido
             ? expectedAtPunto(horario, recorrido, step.puntoId, salidaHoy)
             : undefined,
-        pendingAlerta: Boolean(pending),
+        pendingAlerta: pending,
+        done,
       };
     });
+  const activeIndex = steps.findIndex((s) => !s.done);
   const inbox = notificaciones.filter((n) => n.userId === user.id);
   return {
     dbUser,
@@ -166,6 +202,7 @@ export async function driverSnapshot(user: SessionUser) {
     horario,
     recorrido,
     steps,
+    activeIndex,
     inbox,
     busetas,
     puntos,

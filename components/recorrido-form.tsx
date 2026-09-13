@@ -18,7 +18,7 @@ export function RecorridoForm({
   );
 
   return (
-    <form action={saveRecorridoAction} className="space-y-3">
+    <form action={saveRecorridoAction as never} className="space-y-3">
       {recorrido ? <input type="hidden" name="id" value={recorrido.id} /> : null}
       <div className="form-grid-compact">
         <div className="sm:col-span-2">
@@ -51,6 +51,7 @@ export function RecorridoForm({
             >
               {puntos.map((p) => (
                 <option key={p.id} value={p.id}>
+                  {p.numero != null ? `#${p.numero} · ` : ""}
                   {p.name}
                 </option>
               ))}

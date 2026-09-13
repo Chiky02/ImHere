@@ -156,25 +156,67 @@ export function requiredPermissionForPath(pathname: string): Permission | null {
 
 export type NavLink = { href: string; label: string; permission?: Permission };
 
-export function navLinksForUser(user: SessionUser): NavLink[] {
-  const links: NavLink[] = [];
+export type NavGroup = { id: string; label: string; links: NavLink[] };
+
+export function navGroupsForUser(user: SessionUser): NavGroup[] {
   if (user.role === "admin") {
-    const admin: NavLink[] = [
-      { href: "/admin", label: "Inicio", permission: "manage.dashboard" },
-      { href: "/admin/puntos", label: "Puntos", permission: "manage.puntos" },
-      { href: "/admin/recorridos", label: "Recorridos", permission: "manage.recorridos" },
-      { href: "/admin/busetas", label: "Busetas", permission: "manage.busetas" },
-      { href: "/admin/conductores", label: "Personas", permission: "manage.personas" },
-      { href: "/admin/roles", label: "Roles", permission: "manage.roles" },
-      { href: "/admin/horarios", label: "Horarios", permission: "manage.horarios" },
-      { href: "/admin/historial", label: "Historial", permission: "manage.historial" },
-      { href: "/admin/configuracion", label: "Config", permission: "manage.config" },
-      { href: "/operador", label: "Panel punto", permission: "operador.panel" },
+    const groups: NavGroup[] = [
+      {
+        id: "operacion",
+        label: "Operación",
+        links: [
+          { href: "/admin", label: "Inicio", permission: "manage.dashboard" },
+          { href: "/operador", label: "Panel punto", permission: "operador.panel" },
+          { href: "/admin/historial", label: "Historial", permission: "manage.historial" },
+        ],
+      },
+      {
+        id: "rutas",
+        label: "Rutas",
+        links: [
+          { href: "/admin/puntos", label: "Puntos", permission: "manage.puntos" },
+          { href: "/admin/recorridos", label: "Recorridos", permission: "manage.recorridos" },
+          { href: "/admin/horarios", label: "Horarios", permission: "manage.horarios" },
+        ],
+      },
+      {
+        id: "flota",
+        label: "Flota",
+        links: [
+          { href: "/admin/busetas", label: "Busetas", permission: "manage.busetas" },
+          { href: "/admin/conductores", label: "Personas", permission: "manage.personas" },
+        ],
+      },
+      {
+        id: "sistema",
+        label: "Sistema",
+        links: [
+          { href: "/admin/roles", label: "Roles", permission: "manage.roles" },
+          { href: "/admin/configuracion", label: "Config", permission: "manage.config" },
+          { href: "/cuenta", label: "Cuenta" },
+        ],
+      },
     ];
-    for (const l of admin) {
-      if (!l.permission || hasPermission(user, l.permission)) links.push(l);
-    }
-  } else if (user.role === "operator") {
+    return groups
+      .map((g) => ({
+        ...g,
+        links: g.links.filter(
+          (l) => !l.permission || hasPermission(user, l.permission),
+        ),
+      }))
+      .filter((g) => g.links.length > 0);
+  }
+
+  const flat = navLinksForUser(user);
+  return [{ id: "menu", label: "Menú", links: flat }];
+}
+
+export function navLinksForUser(user: SessionUser): NavLink[] {
+  if (user.role === "admin") {
+    return navGroupsForUser(user).flatMap((g) => g.links);
+  }
+  const links: NavLink[] = [];
+  if (user.role === "operator") {
     if (hasPermission(user, "operador.panel")) {
       links.push({ href: "/operador", label: "Panel" });
     }

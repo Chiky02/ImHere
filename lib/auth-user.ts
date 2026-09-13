@@ -25,6 +25,7 @@ export async function buildSessionUser(user: User): Promise<SessionUser> {
     roleId,
     roleName: appRole?.name,
     busetaId: user.busetaId,
+    puntoId: user.puntoId,
     approved: user.approved,
     active: user.active !== false,
     permissions,

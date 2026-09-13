@@ -52,6 +52,7 @@ Configured in the app: **Admin → Config** (`/admin/configuracion`).
    - `supabase/migrations/004_registro_descripcion.sql`
    - `supabase/migrations/005_roles_permissions.sql`
    - `supabase/migrations/006_flexible_schedules.sql` — salida del conductor, horarios flexibles, admin con panel operador
+   - `supabase/migrations/007_punto_asignado.sql` — punto asignado a operador/admin + numeración de puntos
    - (optional) `supabase/seed.sql` — demo users
 3. In **Project Settings → API**, copy:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`

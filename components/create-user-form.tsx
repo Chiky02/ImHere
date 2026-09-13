@@ -5,13 +5,16 @@ import { saveUserAction } from "@/lib/actions";
 import { ConfirmForm } from "./confirm-form";
 
 type BusetaOpt = { id: string; codigo: string };
+type PuntoOpt = { id: string; label: string };
 type RoleOpt = { id: string; name: string; home: string };
 
 export function CreateUserForm({
   busetas,
+  puntos = [],
   roles,
 }: {
   busetas: BusetaOpt[];
+  puntos?: PuntoOpt[];
   roles: RoleOpt[];
 }) {
   const [state, formAction, pending] = useActionState(
@@ -36,11 +39,6 @@ export function CreateUserForm({
       {state?.error ? (
         <p className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-signal">
           {state.error}
-        </p>
-      ) : null}
-      {state?.ok ? (
-        <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {state.message ?? "Usuario creado."}
         </p>
       ) : null}
       <input type="hidden" name="approved" value="on" />
@@ -78,12 +76,23 @@ export function CreateUserForm({
           </select>
         </div>
         <div>
-          <label htmlFor="cu-buseta">Buseta (si aplica)</label>
+          <label htmlFor="cu-buseta">Buseta (conductores)</label>
           <select id="cu-buseta" name="busetaId" defaultValue="" className="input-compact w-full">
             <option value="">—</option>
             {busetas.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.codigo}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="cu-punto">Punto (operador/admin)</label>
+          <select id="cu-punto" name="puntoId" defaultValue="" className="input-compact w-full">
+            <option value="">—</option>
+            {puntos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
               </option>
             ))}
           </select>

@@ -1,14 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminListHeader } from "@/components/admin-list-header";
 import { AppShell } from "@/components/app-shell";
-import { IconSave, IconTrash, IconUser } from "@/components/action-icons";
+import { IconEdit, IconTrash, IconUser } from "@/components/action-icons";
 import { ConfirmForm } from "@/components/confirm-form";
 import { ListToolbar } from "@/components/list-toolbar";
 import { PaginationNav } from "@/components/pagination";
-import { PageTitle } from "@/components/ui";
 import {
   assignDriverToBusetaAction,
   deleteBusetaAction,
-  saveBusetaAction,
 } from "@/lib/actions";
 import { listQuery } from "@/lib/list-query";
 import * as repo from "@/lib/repo";
@@ -24,16 +24,9 @@ export default async function BusetasPage({
   const sp = await searchParams;
   const [busetas, users] = await Promise.all([repo.listBusetas(), repo.listUsers()]);
   const drivers = users.filter((u) => u.role === "driver" && u.approved);
-  const driverOf = (busetaId: string) =>
-    drivers.find((u) => u.busetaId === busetaId);
-
   const rows = busetas.map((b) => {
-    const driver = driverOf(b.id);
-    return {
-      ...b,
-      driverName: driver?.name ?? "",
-      driverId: driver?.id,
-    };
+    const driver = drivers.find((u) => u.busetaId === b.id);
+    return { ...b, driverName: driver?.name ?? "", driverId: driver?.id };
   });
   const list = listQuery(rows, {
     q: sp.q,
@@ -46,40 +39,13 @@ export default async function BusetasPage({
 
   return (
     <AppShell user={user}>
-      <PageTitle
+      <AdminListHeader
         title="Busetas"
-        subtitle="Un solo conductor activo por buseta. Al asignar, se libera al anterior."
+        subtitle="Un conductor activo por buseta. Al asignar, el anterior queda libre."
+        createHref="/admin/busetas/nuevo"
+        createLabel="Nueva buseta"
       />
-
-      <ConfirmForm
-        action={saveBusetaAction}
-        title="¿Agregar buseta?"
-        message="Se creará una nueva buseta con ese número."
-        confirmLabel="Agregar"
-        tone="default"
-        className="card mb-6 p-4 sm:p-5"
-      >
-        <h2 className="display mb-3 text-xl">Nueva buseta</h2>
-        <div className="form-grid-compact">
-          <div>
-            <label htmlFor="codigo">Número</label>
-            <input
-              id="codigo"
-              name="codigo"
-              required
-              placeholder="5012"
-              inputMode="numeric"
-              className="input-compact w-full max-w-[10rem]"
-            />
-          </div>
-          <button className="btn btn-primary" type="submit">
-            Agregar
-          </button>
-        </div>
-      </ConfirmForm>
-
       <div className="card p-4 sm:p-5">
-        <h2 className="display mb-3 text-xl">Listado</h2>
         <ListToolbar
           path="/admin/busetas"
           q={list.q}
@@ -92,27 +58,13 @@ export default async function BusetasPage({
               <tr>
                 <th>Número</th>
                 <th>Conductor</th>
-                <th className="w-24">Acciones</th>
+                <th className="w-28">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {list.items.map((b) => (
                 <tr key={b.id}>
-                  <td>
-                    <form action={saveBusetaAction} className="table-actions">
-                      <input type="hidden" name="id" value={b.id} />
-                      <input
-                        name="codigo"
-                        defaultValue={b.codigo}
-                        required
-                        inputMode="numeric"
-                        className="input-compact w-24"
-                      />
-                      <button type="submit" className="icon-btn" title="Guardar número">
-                        <IconSave />
-                      </button>
-                    </form>
-                  </td>
+                  <td className="font-semibold">{b.codigo}</td>
                   <td>
                     <form
                       action={assignDriverToBusetaAction as never}
@@ -128,33 +80,32 @@ export default async function BusetasPage({
                         {drivers.map((d) => (
                           <option key={d.id} value={d.id}>
                             {d.name}
-                            {d.busetaId && d.busetaId !== b.id
-                              ? " · otra buseta"
-                              : ""}
+                            {d.busetaId && d.busetaId !== b.id ? " · otra" : ""}
                           </option>
                         ))}
                       </select>
-                      <button
-                        type="submit"
-                        className="icon-btn"
-                        title="Asignar / liberar conductor"
-                      >
+                      <button type="submit" className="icon-btn" title="Asignar">
                         <IconUser />
                       </button>
                     </form>
                   </td>
                   <td>
-                    <ConfirmForm
-                      action={deleteBusetaAction}
-                      title={`¿Archivar buseta ${b.codigo}?`}
-                      message="Queda archivada. El número sigue en el historial."
-                      confirmLabel="Archivar"
-                    >
-                      <input type="hidden" name="id" value={b.id} />
-                      <button type="submit" className="icon-btn danger" title="Eliminar">
-                        <IconTrash />
-                      </button>
-                    </ConfirmForm>
+                    <div className="table-actions">
+                      <Link href={`/admin/busetas/${b.id}`} className="icon-btn" title="Editar">
+                        <IconEdit />
+                      </Link>
+                      <ConfirmForm
+                        action={deleteBusetaAction}
+                        title={`¿Archivar buseta ${b.codigo}?`}
+                        message="Queda archivada. El número sigue en el historial."
+                        confirmLabel="Archivar"
+                      >
+                        <input type="hidden" name="id" value={b.id} />
+                        <button type="submit" className="icon-btn danger" title="Eliminar">
+                          <IconTrash />
+                        </button>
+                      </ConfirmForm>
+                    </div>
                   </td>
                 </tr>
               ))}

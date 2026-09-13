@@ -17,10 +17,12 @@ type Step = {
   puntoId: string;
   puntoName: string;
   puntoAddress: string;
+  puntoNumero?: number;
   orden: number;
   tiempoEsperadoMin: number;
   esperado?: string;
   pendingAlerta: boolean;
+  done?: boolean;
 };
 
 type Note = {
@@ -119,6 +121,7 @@ export function DriverHome({
   salidaHoy,
   tiempoViajeMin,
   steps,
+  activeIndex = -1,
   inbox,
 }: {
   approved: boolean;
@@ -128,12 +131,16 @@ export function DriverHome({
   salidaHoy?: string;
   tiempoViajeMin?: number;
   steps: Step[];
+  activeIndex?: number;
   inbox: Note[];
 }) {
   const [inboxPage, setInboxPage] = useState(1);
   const router = useRouter();
   const notes = paginate(inbox, inboxPage, 10);
   const canAlert = approved && Boolean(busetaCodigo);
+  const active = activeIndex >= 0 ? steps[activeIndex] : undefined;
+  const doneSteps = steps.filter((s) => s.done);
+  const upcoming = steps.filter((_, i) => activeIndex >= 0 && i > activeIndex);
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 4000);
@@ -221,33 +228,70 @@ export function DriverHome({
           <div className="card p-5 text-muted">
             No hay puntos en tu recorrido. El admin debe armar la ruta.
           </div>
-        ) : (
-          steps.map((s) => (
-            <article key={s.puntoId} className="card p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Punto {s.orden}
+        ) : active ? (
+          <article className="card border-2 border-[var(--forest)] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Siguiente cruce · Punto{" "}
+                  {active.puntoNumero ?? active.orden}
+                </p>
+                <h2 className="display text-2xl">{active.puntoName}</h2>
+                <p className="text-sm text-muted">{active.puntoAddress}</p>
+                {active.esperado ? (
+                  <p className="mt-1 text-sm">
+                    Llegada estimada {active.esperado}
                   </p>
-                  <h2 className="display text-2xl">{s.puntoName}</h2>
-                  <p className="text-sm text-muted">{s.puntoAddress}</p>
-                  {s.esperado ? (
-                    <p className="mt-1 text-sm">
-                      Llegada programada {s.esperado}
-                    </p>
-                  ) : null}
-                </div>
-                {s.pendingAlerta ? <Badge tone="warn">Aviso enviado</Badge> : null}
+                ) : null}
               </div>
-              <AvisoButton
-                puntoId={s.puntoId}
-                canAlert={canAlert}
-                pendingAlerta={s.pendingAlerta}
-                disabledReason={disabledReason(s)}
-              />
-            </article>
-          ))
+              <Badge tone="warn">Activo</Badge>
+            </div>
+            <AvisoButton
+              puntoId={active.puntoId}
+              canAlert={canAlert}
+              pendingAlerta={active.pendingAlerta}
+              disabledReason={disabledReason(active)}
+            />
+            <p className="mt-3 text-xs text-muted">
+              Al avisar, este punto pasa a la cola y se habilita el siguiente.
+            </p>
+          </article>
+        ) : (
+          <div className="card p-5 text-forest">
+            Completaste todos los avisos del recorrido de hoy.
+          </div>
         )}
+
+        {doneSteps.length > 0 ? (
+          <div className="card p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Ya avisados
+            </p>
+            <ul className="space-y-1 text-sm text-muted">
+              {doneSteps.map((s) => (
+                <li key={s.puntoId}>
+                  ✓ #{s.puntoNumero ?? s.orden} {s.puntoName}
+                  {s.pendingAlerta ? " · en cola del punto" : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {upcoming.length > 0 ? (
+          <div className="card p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Después
+            </p>
+            <ul className="space-y-1 text-sm text-muted">
+              {upcoming.map((s) => (
+                <li key={s.puntoId}>
+                  #{s.puntoNumero ?? s.orden} {s.puntoName}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <section className="card p-5">

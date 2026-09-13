@@ -146,7 +146,9 @@ export function OperatorPanel({
   if (!data.selected && data.myPuntos.length === 0) {
     return (
       <div className="card p-6">
-        No tienes puntos asignados. Pide al admin que te vincule a un control.
+        {data.needsPuntoAssignment
+          ? "El admin debe asignarte un punto en Personas (editar tu usuario)."
+          : "No tienes puntos asignados. Pide al admin que te vincule a un control."}
       </div>
     );
   }
@@ -177,9 +179,13 @@ export function OperatorPanel({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <p className="m-0 text-sm font-semibold text-ink">
-          Punto: <span className="font-normal">{selectedName}</span>
+          Punto:{" "}
+          <span className="font-normal">
+            {data.selected?.numero != null ? `#${data.selected.numero} · ` : ""}
+            {selectedName}
+          </span>
         </p>
-        {data.myPuntos.length > 1 ? (
+        {!data.lockedToPunto && data.myPuntos.length > 1 ? (
           <div className="flex w-full flex-wrap gap-2">
             {data.myPuntos.map((p) => (
               <button
@@ -192,10 +198,17 @@ export function OperatorPanel({
                 }
                 onClick={() => setPuntoId(p.id)}
               >
+                {p.numero != null ? `#${p.numero} ` : ""}
                 {p.name}
               </button>
             ))}
           </div>
+        ) : null}
+        {data.needsPuntoAssignment ? (
+          <p className="w-full rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            El admin aún no te asignó un punto fijo. Mientras tanto puedes
+            elegir uno abajo si tienes varios vinculados.
+          </p>
         ) : null}
         <button
           type="button"

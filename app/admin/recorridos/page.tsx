@@ -1,11 +1,11 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminListHeader } from "@/components/admin-list-header";
 import { AppShell } from "@/components/app-shell";
 import { IconEdit, IconTrash } from "@/components/action-icons";
 import { ConfirmForm } from "@/components/confirm-form";
 import { ListToolbar } from "@/components/list-toolbar";
 import { PaginationNav } from "@/components/pagination";
-import { RecorridoForm } from "@/components/recorrido-form";
-import { PageTitle } from "@/components/ui";
 import { deleteRecorridoAction } from "@/lib/actions";
 import { listQuery } from "@/lib/list-query";
 import * as repo from "@/lib/repo";
@@ -14,7 +14,7 @@ import { readSession } from "@/lib/session";
 export default async function RecorridosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; q?: string; sort?: string; edit?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; sort?: string }>;
 }) {
   const user = await readSession();
   if (!user || user.role !== "admin") redirect("/login");
@@ -23,8 +23,11 @@ export default async function RecorridosPage({
     repo.listRecorridos(),
     repo.listPuntos(),
   ]);
-  const activePuntos = puntos.filter((p) => p.active);
-  const nameOf = (id: string) => puntos.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => {
+    const p = puntos.find((x) => x.id === id);
+    if (!p) return id;
+    return p.numero != null ? `#${p.numero} ${p.name}` : p.name;
+  };
   const rows = recorridos.map((r) => ({
     ...r,
     resumen: r.puntos
@@ -37,28 +40,20 @@ export default async function RecorridosPage({
     q: sp.q,
     sort: sp.sort as "asc" | "desc" | undefined,
     page: sp.page,
-    pageSize: 8,
+    pageSize: 10,
     fields: (r) => [r.name, r.resumen],
     sortKey: (r) => r.name,
   });
-  const editing = sp.edit ? recorridos.find((r) => r.id === sp.edit) : undefined;
 
   return (
     <AppShell user={user}>
-      <PageTitle
+      <AdminListHeader
         title="Recorridos"
-        subtitle="Secuencia de puntos y minutos entre ellos. Crea arriba; edita desde la tabla."
+        subtitle="Secuencia de puntos de cruce. Crear y editar en pantalla aparte."
+        createHref="/admin/recorridos/nuevo"
+        createLabel="Nuevo recorrido"
       />
-
-      <div className="card mb-6 p-4 sm:p-5">
-        <h2 className="display mb-3 text-xl">
-          {editing ? `Editar: ${editing.name}` : "Nuevo recorrido"}
-        </h2>
-        <RecorridoForm puntos={activePuntos} recorrido={editing} />
-      </div>
-
       <div className="card p-4 sm:p-5">
-        <h2 className="display mb-3 text-xl">Listado</h2>
         <ListToolbar
           path="/admin/recorridos"
           q={list.q}
@@ -81,13 +76,13 @@ export default async function RecorridosPage({
                   <td className="max-w-md text-sm text-muted">{r.resumen || "Sin puntos"}</td>
                   <td>
                     <div className="table-actions">
-                      <a
+                      <Link
+                        href={`/admin/recorridos/${r.id}`}
                         className="icon-btn"
-                        href={`/admin/recorridos?edit=${r.id}`}
                         title="Editar"
                       >
                         <IconEdit />
-                      </a>
+                      </Link>
                       <ConfirmForm
                         action={deleteRecorridoAction}
                         title={`¿Archivar ${r.name}?`}

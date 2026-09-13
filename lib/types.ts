@@ -20,6 +20,8 @@ export type User = {
   role: Role;
   roleId?: string;
   busetaId?: string;
+  /** Punto de control que gestiona (operador / admin en panel) */
+  puntoId?: string;
   approved: boolean;
   /** If false, login is blocked */
   active: boolean;
@@ -34,6 +36,8 @@ export type Punto = {
   id: string;
   name: string;
   address: string;
+  /** Número de cruce en el sistema (visible en listados y avisos) */
+  numero?: number;
   operatorIds: string[];
   active: boolean;
   deletedAt?: string;
@@ -158,6 +162,7 @@ export type SessionUser = {
   roleId?: string;
   roleName?: string;
   busetaId?: string;
+  puntoId?: string;
   approved: boolean;
   active: boolean;
   permissions: string[];

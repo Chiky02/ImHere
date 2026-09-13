@@ -189,6 +189,29 @@ button.icon-btn.danger {
   }
 }
 
+.admin-layout {
+  display: flex;
+  min-height: 100%;
+  align-items: stretch;
+}
+
+.admin-sidebar {
+  flex-shrink: 0;
+}
+
+@media (min-width: 1024px) {
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    width: 16.5rem;
+  }
+}
+
+.admin-main {
+  background: var(--paper);
+}
+
 @media (max-width: 640px) {
   .display {
     letter-spacing: -0.02em;

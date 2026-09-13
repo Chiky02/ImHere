@@ -10,8 +10,9 @@ import {
   SYSTEM_ROLE_IDS,
 } from "./permissions";
 import * as repo from "./repo";
+import { horarioHoy } from "./schedule";
 import { clearSessionCookie, homeForRole, readSession, setSessionCookie } from "./session";
-import { nowIso } from "./time";
+import { nowIso, todayDate } from "./time";
 import { notifyDriver } from "./push";
 import type {
   AppRole,
@@ -111,17 +112,32 @@ async function driver() {
 export async function savePuntoAction(formData: FormData) {
   await admin();
   const id = String(formData.get("id") ?? "") || crypto.randomUUID();
+  const existing = id ? await repo.getPunto(id) : undefined;
   const operatorIds = formData.getAll("operatorIds").map(String).filter(Boolean);
+  const numeroRaw = String(formData.get("numero") ?? "").trim();
+  const numero = numeroRaw ? Number(numeroRaw) : existing?.numero;
   const punto: Punto = {
     id,
     name: String(formData.get("name") ?? "").trim(),
     address: String(formData.get("address") ?? "").trim(),
+    numero: Number.isFinite(numero) ? Number(numero) : undefined,
     operatorIds,
     active: formData.get("active") !== "off",
   };
-  if (!punto.name) return;
+  if (!punto.name) return { error: "El nombre es obligatorio." };
   await repo.upsertPunto(punto);
+  // Sync assigned users' puntoId when listed as operators
+  const users = await repo.listUsers();
+  for (const uid of operatorIds) {
+    const u = users.find((x) => x.id === uid);
+    if (u && (u.role === "operator" || u.role === "admin") && !u.puntoId) {
+      u.puntoId = punto.id;
+      await repo.upsertUser(u);
+    }
+  }
   revalidatePath("/admin/puntos");
+  revalidatePath("/operador");
+  redirect("/admin/puntos");
 }
 
 export async function deletePuntoAction(formData: FormData) {
@@ -146,9 +162,10 @@ export async function saveBusetaAction(formData: FormData) {
     placa: existing?.placa ?? "",
     active: formData.get("active") === "off" ? false : true,
   };
-  if (!buseta.codigo) return;
+  if (!buseta.codigo) return { error: "Indica el número de buseta." };
   await repo.upsertBuseta(buseta);
   revalidatePath("/admin/busetas");
+  redirect("/admin/busetas");
 }
 
 export async function deleteBusetaAction(formData: FormData) {
@@ -182,9 +199,10 @@ export async function saveRecorridoAction(formData: FormData) {
     active: formData.get("active") !== "off",
     puntos,
   };
-  if (!recorrido.name) return;
+  if (!recorrido.name) return { error: "El nombre es obligatorio." };
   await repo.upsertRecorrido(recorrido);
   revalidatePath("/admin/recorridos");
+  redirect("/admin/recorridos");
 }
 
 export async function deleteRecorridoAction(formData: FormData) {
@@ -223,7 +241,7 @@ export async function saveHorarioAction(formData: FormData) {
   }
   await repo.upsertHorario(horario);
   revalidatePath("/admin/horarios");
-  return { ok: true };
+  redirect("/admin/horarios");
 }
 
 export async function deleteHorarioAction(formData: FormData) {
@@ -276,6 +294,8 @@ export async function saveUserAction(formData: FormData) {
     return { error: "Indica una contraseña inicial." };
   }
 
+  const busetaId = String(formData.get("busetaId") ?? "") || undefined;
+  const puntoId = String(formData.get("puntoId") ?? "") || undefined;
   const user: User = {
     id,
     name,
@@ -285,19 +305,46 @@ export async function saveUserAction(formData: FormData) {
       : existing!.passwordHash,
     role,
     roleId: appRole.id,
-    busetaId: String(formData.get("busetaId") ?? "") || undefined,
+    busetaId: role === "driver" ? busetaId : undefined,
+    puntoId: role === "operator" || role === "admin" ? puntoId : undefined,
     approved: formData.get("approved") !== "off",
     active,
     createdAt: existing?.createdAt ?? nowIso(),
   };
   try {
     await repo.upsertUser(user);
+    if (role === "driver" && busetaId) {
+      await claimBusetaExclusive(user.id, busetaId);
+    }
+    if (user.puntoId) {
+      await linkUserToPunto(user.id, user.puntoId);
+    }
   } catch (err) {
     console.error("saveUserAction", err);
     return { error: "No se pudo guardar el usuario. Revisa los datos." };
   }
   revalidatePath("/admin/conductores");
-  return { ok: true, message: isNew ? "Usuario creado correctamente." : "Usuario actualizado." };
+  revalidatePath("/admin/puntos");
+  revalidatePath("/operador");
+  redirect("/admin/conductores");
+}
+
+export async function assignPuntoAction(formData: FormData) {
+  await admin();
+  const id = String(formData.get("id") ?? "");
+  const puntoId = String(formData.get("puntoId") ?? "") || undefined;
+  const user = await repo.getUserById(id);
+  if (!user) return { error: "Usuario no encontrado." };
+  if (user.role !== "operator" && user.role !== "admin") {
+    return { error: "Solo operadores o admin gestionan un punto." };
+  }
+  user.puntoId = puntoId;
+  await repo.upsertUser(user);
+  if (puntoId) await linkUserToPunto(user.id, puntoId);
+  revalidatePath("/admin/conductores");
+  revalidatePath("/admin/puntos");
+  revalidatePath("/operador");
+  return { ok: true };
 }
 
 export async function updateUserRoleAction(formData: FormData) {
@@ -550,6 +597,16 @@ async function claimBusetaExclusive(userId: string, busetaId?: string) {
   await repo.upsertUser(user);
 }
 
+/** Ensure operator/admin is linked on punto_operadores for their assigned point. */
+async function linkUserToPunto(userId: string, puntoId: string) {
+  const punto = await repo.getPunto(puntoId);
+  if (!punto) return;
+  if (!punto.operatorIds.includes(userId)) {
+    punto.operatorIds = [...punto.operatorIds, userId];
+    await repo.upsertPunto(punto);
+  }
+}
+
 export async function updateProfileAction(formData: FormData) {
   const session = await readSession();
   if (!session) throw new Error("No autorizado");
@@ -610,20 +667,48 @@ export async function avisoProximidadAction(formData: FormData) {
     }
     const puntoId = String(formData.get("puntoId") ?? "");
     if (!puntoId) return { error: "Elige el punto al que te acercas." };
-    const pending = (await repo.listAlertas()).find(
+
+    const [horarios, recorridos, alertas] = await Promise.all([
+      repo.listHorarios(),
+      repo.listRecorridos(),
+      repo.listAlertas(),
+    ]);
+    const horario = horarioHoy(horarios, user.id, user.busetaId);
+    const recorrido = horario
+      ? recorridos.find((r) => r.id === horario.recorridoId)
+      : recorridos.find((r) => r.active);
+    const ordered = [...(recorrido?.puntos ?? [])].sort(
+      (a, b) => a.orden - b.orden,
+    );
+    if (ordered.length) {
+      const current = ordered.find((step) => {
+        const done = alertas.some(
+          (a) =>
+            a.conductorId === user.id &&
+            a.puntoId === step.puntoId &&
+            (a.status === "pending" || a.status === "arrived") &&
+            isTodayIso(a.createdAt),
+        );
+        return !done;
+      });
+      if (!current) {
+        return { error: "Ya avisaste todos los puntos de tu recorrido de hoy." };
+      }
+      if (current.puntoId !== puntoId) {
+        return {
+          error:
+            "Solo puedes avisar el siguiente punto del recorrido. Completa el actual primero.",
+        };
+      }
+    }
+
+    const pending = alertas.find(
       (a) =>
         a.conductorId === user.id &&
         a.puntoId === puntoId &&
         a.status === "pending",
     );
     if (pending) return { error: "Ya avisaste que vas hacia ese punto." };
-    const horarios = await repo.listHorarios();
-    const horario = horarios.find(
-      (h) =>
-        h.conductorId === user.id &&
-        h.busetaId === user.busetaId &&
-        h.active,
-    );
     await repo.insertAlerta({
       id: crypto.randomUUID(),
       puntoId,
@@ -649,6 +734,16 @@ export async function avisoProximidadAction(formData: FormData) {
         "No se pudo enviar el aviso. Revisa la conexión e inténtalo de nuevo.",
     };
   }
+}
+
+function isTodayIso(iso: string) {
+  const d = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+  return d === todayDate();
 }
 
 export async function registrarLlegadaAction(formData: FormData) {

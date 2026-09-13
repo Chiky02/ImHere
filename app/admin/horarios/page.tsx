@@ -1,11 +1,12 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdminListHeader } from "@/components/admin-list-header";
 import { AppShell } from "@/components/app-shell";
-import { IconTrash } from "@/components/action-icons";
+import { IconEdit, IconTrash } from "@/components/action-icons";
 import { ConfirmForm } from "@/components/confirm-form";
 import { ListToolbar } from "@/components/list-toolbar";
 import { PaginationNav } from "@/components/pagination";
-import { PageTitle } from "@/components/ui";
-import { deleteHorarioAction, saveHorarioAction } from "@/lib/actions";
+import { deleteHorarioAction } from "@/lib/actions";
 import { listQuery } from "@/lib/list-query";
 import * as repo from "@/lib/repo";
 import { readSession } from "@/lib/session";
@@ -25,7 +26,6 @@ export default async function HorariosPage({
     repo.listBusetas(),
     repo.listUsers(),
   ]);
-  const drivers = users.filter((u) => u.role === "driver" && u.approved);
   const rows = horarios.map((h) => {
     const recorrido = recorridos.find((r) => r.id === h.recorridoId)?.name ?? "";
     const buseta = h.busetaId
@@ -59,98 +59,18 @@ export default async function HorariosPage({
 
   return (
     <AppShell user={user}>
-      <PageTitle
+      <AdminListHeader
         title="Horarios"
-        subtitle="Plantilla por recorrido y días. La salida la puede indicar el conductor el día del viaje; buseta y conductor son opcionales (rotativos)."
+        subtitle="Plantillas por recorrido. Crear y editar aparte."
+        createHref="/admin/horarios/nuevo"
+        createLabel="Nueva plantilla"
       />
-
-      <form action={saveHorarioAction as never} className="card mb-6 space-y-3 p-4 sm:p-5">
-        <h2 className="display text-xl">Nueva plantilla</h2>
-        <div className="form-grid-compact">
-          <div className="sm:col-span-2">
-            <label>Recorrido</label>
-            <select name="recorridoId" required className="input-compact w-full max-w-xs">
-              {recorridos.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label>Tiempo de viaje (min)</label>
-            <input
-              name="tiempoViajeMin"
-              type="number"
-              min={1}
-              defaultValue={100}
-              className="input-compact w-24"
-              required
-            />
-          </div>
-          <div>
-            <label>Buseta (opcional)</label>
-            <select name="busetaId" defaultValue="" className="input-compact max-w-[8rem]">
-              <option value="">Rotativa</option>
-              {busetas.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.codigo}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label>Conductor (opcional)</label>
-            <select name="conductorId" defaultValue="" className="input-compact max-w-[12rem]">
-              <option value="">Rotativo</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label>Salida ref. (opcional)</label>
-            <input name="horaSalida" type="time" className="input-compact" />
-          </div>
-          <div>
-            <label>Llegada ref. (opcional)</label>
-            <input name="horaLlegada" type="time" className="input-compact" />
-          </div>
-        </div>
-        <div>
-          <label>Días</label>
-          <div className="flex flex-wrap gap-3">
-            {DIA_LABELS.map((label, i) => (
-              <label
-                key={label}
-                className="m-0 flex items-center gap-1 normal-case tracking-normal"
-              >
-                <input
-                  type="checkbox"
-                  name="dias"
-                  value={i}
-                  defaultChecked={i >= 1 && i <= 6}
-                  className="w-auto"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-        <button className="btn btn-primary" type="submit">
-          Guardar plantilla
-        </button>
-      </form>
-
       <div className="card p-4 sm:p-5">
-        <h2 className="display mb-3 text-xl">Listado</h2>
         <ListToolbar
           path="/admin/horarios"
           q={list.q}
           sort={list.sort}
-          placeholder="Buscar recorrido, buseta, conductor…"
+          placeholder="Buscar…"
         />
         <div className="overflow-x-auto">
           <table className="w-full max-w-5xl">
@@ -161,39 +81,34 @@ export default async function HorariosPage({
                 <th>Buseta</th>
                 <th>Conductor</th>
                 <th>Días</th>
-                <th className="w-16"></th>
+                <th className="w-24"></th>
               </tr>
             </thead>
             <tbody>
               {list.items.map((h) => (
                 <tr key={h.id}>
                   <td className="font-semibold">{h.recorridoName || "—"}</td>
-                  <td>
-                    {h.tiempoViajeMin} min
-                    {h.horaSalida && h.horaSalida !== "00:00" ? (
-                      <span className="block text-xs text-muted">
-                        Ref. {h.horaSalida}
-                        {h.horaLlegada && h.horaLlegada !== "00:00"
-                          ? ` → ${h.horaLlegada}`
-                          : ""}
-                      </span>
-                    ) : null}
-                  </td>
+                  <td>{h.tiempoViajeMin} min</td>
                   <td>{h.busetaCodigo || "Rotativa"}</td>
                   <td>{h.conductorName || "Rotativo"}</td>
                   <td className="text-sm">{h.diasLabel}</td>
                   <td>
-                    <ConfirmForm
-                      action={deleteHorarioAction}
-                      title="¿Quitar esta plantilla?"
-                      message="Quedará archivada (borrado lógico)."
-                      confirmLabel="Quitar"
-                    >
-                      <input type="hidden" name="id" value={h.id} />
-                      <button type="submit" className="icon-btn danger" title="Eliminar">
-                        <IconTrash />
-                      </button>
-                    </ConfirmForm>
+                    <div className="table-actions">
+                      <Link href={`/admin/horarios/${h.id}`} className="icon-btn" title="Editar">
+                        <IconEdit />
+                      </Link>
+                      <ConfirmForm
+                        action={deleteHorarioAction}
+                        title="¿Quitar esta plantilla?"
+                        message="Quedará archivada."
+                        confirmLabel="Quitar"
+                      >
+                        <input type="hidden" name="id" value={h.id} />
+                        <button type="submit" className="icon-btn danger" title="Eliminar">
+                          <IconTrash />
+                        </button>
+                      </ConfirmForm>
+                    </div>
                   </td>
                 </tr>
               ))}
