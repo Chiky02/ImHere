@@ -13,9 +13,9 @@ export default async function NuevoRecorridoPage() {
   return (
     <AppShell user={user}>
       <PageTitle title="Nuevo recorrido" subtitle="Ordena los puntos de cruce." />
-      <div className="card max-w-xl p-4 sm:p-5">
+      <div className="card admin-form p-4 sm:p-6">
         <RecorridoForm puntos={puntos} />
-        <Link href="/admin/recorridos" className="btn btn-ghost mt-3 inline-flex">
+        <Link href="/admin/recorridos" className="btn btn-ghost mt-2 inline-flex">
           Cancelar
         </Link>
       </div>

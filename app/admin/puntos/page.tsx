@@ -51,7 +51,7 @@ export default async function PuntosPage({
       <div className="card p-4 sm:p-5">
         <ListToolbar path="/admin/puntos" q={list.q} sort={list.sort} placeholder="Buscar punto…" />
         <div className="overflow-x-auto">
-          <table className="w-full max-w-4xl">
+          <table className="w-full">
             <thead>
               <tr>
                 <th className="w-16">Nº</th>

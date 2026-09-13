@@ -16,7 +16,7 @@ export function AppShell({
       <div className="admin-layout min-h-full">
         <AdminSidebar user={user} groups={groups} />
         <div className="admin-main flex min-h-full min-w-0 flex-1 flex-col">
-          <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-5 sm:py-6">
+          <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-4 sm:px-5 sm:py-6">
             {children}
           </main>
         </div>

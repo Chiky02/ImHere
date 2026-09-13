@@ -164,7 +164,25 @@ export async function saveBusetaAction(formData: FormData) {
   };
   if (!buseta.codigo) return { error: "Indica el número de buseta." };
   await repo.upsertBuseta(buseta);
+
+  // Optional driver assignment on create/edit form
+  if (formData.has("driverId")) {
+    const driverId = String(formData.get("driverId") ?? "").trim();
+    if (!driverId) {
+      const users = await repo.listUsers();
+      for (const u of users) {
+        if (u.busetaId === buseta.id) {
+          await repo.upsertUser({ ...u, busetaId: undefined });
+        }
+      }
+    } else {
+      await claimBusetaExclusive(driverId, buseta.id);
+    }
+  }
+
   revalidatePath("/admin/busetas");
+  revalidatePath("/admin/conductores");
+  revalidatePath("/conductor");
   redirect("/admin/busetas");
 }
 
@@ -560,19 +578,29 @@ export async function assignBusetaAction(formData: FormData) {
 /** Assign/clear driver from the busetas table (driverId + busetaId). */
 export async function assignDriverToBusetaAction(formData: FormData) {
   await admin();
-  const driverId = String(formData.get("driverId") ?? "");
-  const busetaId = String(formData.get("busetaId") ?? "");
+  const driverId = String(formData.get("driverId") ?? "").trim();
+  const busetaId = String(formData.get("busetaId") ?? "").trim();
   if (!busetaId) return { error: "Buseta no válida." };
-  if (!driverId) {
-    const users = await repo.listUsers();
-    for (const u of users) {
-      if (u.busetaId === busetaId) {
-        u.busetaId = undefined;
-        await repo.upsertUser(u);
+  const buseta = await repo.getBuseta(busetaId);
+  if (!buseta) return { error: "Buseta no encontrada." };
+  try {
+    if (!driverId) {
+      const users = await repo.listUsers();
+      for (const u of users) {
+        if (u.busetaId === busetaId) {
+          await repo.upsertUser({ ...u, busetaId: undefined });
+        }
       }
+    } else {
+      const driver = await repo.getUserById(driverId);
+      if (!driver || driver.role !== "driver") {
+        return { error: "Conductor no válido." };
+      }
+      await claimBusetaExclusive(driverId, busetaId);
     }
-  } else {
-    await claimBusetaExclusive(driverId, busetaId);
+  } catch (err) {
+    console.error("assignDriverToBusetaAction", err);
+    return { error: "No se pudo asignar el conductor." };
   }
   revalidatePath("/admin/busetas");
   revalidatePath("/admin/conductores");
@@ -580,21 +608,19 @@ export async function assignDriverToBusetaAction(formData: FormData) {
   return { ok: true };
 }
 
-/** One active driver per buseta: clears previous owners. */
+/** One active driver per buseta: clears previous owners of that buseta. */
 async function claimBusetaExclusive(userId: string, busetaId?: string) {
   const users = await repo.listUsers();
   if (busetaId) {
     for (const u of users) {
       if (u.busetaId === busetaId && u.id !== userId) {
-        u.busetaId = undefined;
-        await repo.upsertUser(u);
+        await repo.upsertUser({ ...u, busetaId: undefined });
       }
     }
   }
-  const user = users.find((u) => u.id === userId) ?? (await repo.getUserById(userId));
+  const user = await repo.getUserById(userId);
   if (!user) return;
-  user.busetaId = busetaId;
-  await repo.upsertUser(user);
+  await repo.upsertUser({ ...user, busetaId: busetaId || undefined });
 }
 
 /** Ensure operator/admin is linked on punto_operadores for their assigned point. */

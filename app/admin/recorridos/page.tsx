@@ -61,7 +61,7 @@ export default async function RecorridosPage({
           placeholder="Buscar recorrido…"
         />
         <div className="overflow-x-auto">
-          <table className="w-full max-w-4xl">
+          <table className="w-full">
             <thead>
               <tr>
                 <th>Nombre</th>

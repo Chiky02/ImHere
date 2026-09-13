@@ -28,7 +28,7 @@ export default async function EditHorarioPage({
   return (
     <AppShell user={user}>
       <PageTitle title="Editar plantilla" />
-      <form action={saveHorarioAction as never} className="card max-w-xl space-y-3 p-4 sm:p-5">
+      <form action={saveHorarioAction as never} className="card admin-form space-y-4 p-4 sm:p-6">
         <input type="hidden" name="id" value={horario.id} />
         <HorarioFields
           recorridos={recorridos}
@@ -36,7 +36,7 @@ export default async function EditHorarioPage({
           drivers={drivers}
           defaults={horario}
         />
-        <div className="flex gap-2">
+        <div className="admin-form-actions">
           <button className="btn btn-primary" type="submit">
             Guardar
           </button>

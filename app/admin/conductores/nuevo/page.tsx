@@ -18,7 +18,7 @@ export default async function NuevaPersonaPage() {
   return (
     <AppShell user={user}>
       <PageTitle title="Nueva persona" subtitle="Rol, buseta o punto según corresponda." />
-      <div className="max-w-xl">
+      <div className="max-w-none">
         <CreateUserForm
           busetas={busetas.map((b) => ({ id: b.id, codigo: b.codigo }))}
           puntos={puntos

@@ -23,13 +23,13 @@ export default async function NuevoHorarioPage() {
         title="Nueva plantilla"
         subtitle="Recorrido y tiempo. Buseta/conductor/horas son opcionales."
       />
-      <form action={saveHorarioAction as never} className="card max-w-xl space-y-3 p-4 sm:p-5">
+      <form action={saveHorarioAction as never} className="card admin-form space-y-4 p-4 sm:p-6">
         <HorarioFields
           recorridos={recorridos}
           busetas={busetas}
           drivers={drivers}
         />
-        <div className="flex gap-2">
+        <div className="admin-form-actions">
           <button className="btn btn-primary" type="submit">
             Guardar
           </button>

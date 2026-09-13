@@ -29,7 +29,7 @@ export function HorarioFields({
             name="recorridoId"
             required
             defaultValue={defaults?.recorridoId}
-            className="input-compact w-full max-w-xs"
+            className="input-compact"
           >
             {recorridos.map((r) => (
               <option key={r.id} value={r.id}>
@@ -45,7 +45,7 @@ export function HorarioFields({
             type="number"
             min={1}
             defaultValue={defaults?.tiempoViajeMin ?? 100}
-            className="input-compact w-24"
+            className="input-compact"
             required
           />
         </div>
@@ -54,7 +54,7 @@ export function HorarioFields({
           <select
             name="busetaId"
             defaultValue={defaults?.busetaId ?? ""}
-            className="input-compact max-w-[8rem]"
+            className="input-compact"
           >
             <option value="">Rotativa</option>
             {busetas.map((b) => (
@@ -69,7 +69,7 @@ export function HorarioFields({
           <select
             name="conductorId"
             defaultValue={defaults?.conductorId ?? ""}
-            className="input-compact max-w-[12rem]"
+            className="input-compact"
           >
             <option value="">Rotativo</option>
             {drivers.map((d) => (
@@ -108,7 +108,7 @@ export function HorarioFields({
       </div>
       <div>
         <label>Días</label>
-        <div className="flex flex-wrap gap-3">
+        <div className="mt-1 flex flex-wrap gap-3">
           {DIA_LABELS.map((label, i) => (
             <label
               key={label}

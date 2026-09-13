@@ -14,24 +14,48 @@ export default async function EditBusetaPage({
   const user = await readSession();
   if (!user || user.role !== "admin") redirect("/login");
   const { id } = await params;
-  const buseta = await repo.getBuseta(id);
+  const [buseta, users] = await Promise.all([repo.getBuseta(id), repo.listUsers()]);
   if (!buseta) notFound();
+  const drivers = users.filter((u) => u.role === "driver" && u.approved);
+  const currentDriverId = drivers.find((d) => d.busetaId === buseta.id)?.id ?? "";
+
   return (
     <AppShell user={user}>
-      <PageTitle title={`Editar buseta ${buseta.codigo}`} />
-      <form action={saveBusetaAction as never} className="card max-w-md space-y-3 p-4 sm:p-5">
+      <PageTitle
+        title={`Editar buseta ${buseta.codigo}`}
+        subtitle="Cambia el número o el conductor asignado."
+      />
+      <form action={saveBusetaAction as never} className="card admin-form space-y-4 p-4 sm:p-6">
         <input type="hidden" name="id" value={buseta.id} />
-        <div>
-          <label>Número</label>
-          <input
-            name="codigo"
-            required
-            defaultValue={buseta.codigo}
-            inputMode="numeric"
-            className="input-compact w-full max-w-[10rem]"
-          />
+        <div className="form-grid-compact">
+          <div>
+            <label>Número</label>
+            <input
+              name="codigo"
+              required
+              defaultValue={buseta.codigo}
+              inputMode="numeric"
+              className="input-compact"
+            />
+          </div>
+          <div>
+            <label>Conductor</label>
+            <select
+              name="driverId"
+              defaultValue={currentDriverId}
+              className="input-compact"
+            >
+              <option value="">Sin conductor</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.busetaId && d.busetaId !== buseta.id ? " · otra buseta" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="admin-form-actions">
           <button className="btn btn-primary" type="submit">
             Guardar
           </button>

@@ -22,12 +22,12 @@ export default async function EditRecorridoPage({
   return (
     <AppShell user={user}>
       <PageTitle title={`Editar: ${recorrido.name}`} />
-      <div className="card max-w-xl p-4 sm:p-5">
+      <div className="card admin-form p-4 sm:p-6">
         <RecorridoForm
           puntos={puntos.filter((p) => p.active)}
           recorrido={recorrido}
         />
-        <Link href="/admin/recorridos" className="btn btn-ghost mt-3 inline-flex">
+        <Link href="/admin/recorridos" className="btn btn-ghost mt-2 inline-flex">
           Cancelar
         </Link>
       </div>

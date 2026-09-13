@@ -23,7 +23,7 @@ export default async function EditPuntoPage({
   return (
     <AppShell user={user}>
       <PageTitle title={`Editar: ${punto.name}`} subtitle="Actualiza número, datos y gestores." />
-      <form action={savePuntoAction as never} className="card max-w-xl space-y-3 p-4 sm:p-5">
+      <form action={savePuntoAction as never} className="card admin-form space-y-4 p-4 sm:p-6">
         <input type="hidden" name="id" value={punto.id} />
         <div className="form-grid-compact">
           <div>
@@ -34,16 +34,16 @@ export default async function EditPuntoPage({
               min={1}
               defaultValue={punto.numero ?? ""}
               required
-              className="input-compact w-24"
+              className="input-compact"
             />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label>Nombre</label>
             <input
               name="name"
               required
               defaultValue={punto.name}
-              className="input-compact w-full"
+              className="input-compact"
             />
           </div>
           <div className="sm:col-span-2">
@@ -51,13 +51,13 @@ export default async function EditPuntoPage({
             <input
               name="address"
               defaultValue={punto.address}
-              className="input-compact w-full"
+              className="input-compact"
             />
           </div>
         </div>
         <div>
           <label>Operadores / admin gestores</label>
-          <div className="flex flex-wrap gap-3">
+          <div className="mt-1 flex flex-wrap gap-3">
             {operators.map((op) => (
               <label key={op.id} className="m-0 flex items-center gap-2 normal-case tracking-normal">
                 <input
@@ -75,7 +75,7 @@ export default async function EditPuntoPage({
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="admin-form-actions">
           <button className="btn btn-primary" type="submit">
             Guardar
           </button>

@@ -32,56 +32,58 @@ export default async function EditPersonaPage({
   return (
     <AppShell user={user}>
       <PageTitle title={`Editar: ${person.name}`} />
-      <div className="stack-cards max-w-xl">
-        <form action={saveUserAction as never} className="card space-y-3 p-4 sm:p-5">
+      <div className="stack-cards wide">
+        <form action={saveUserAction as never} className="card admin-form space-y-3 p-4 sm:p-6">
           <input type="hidden" name="id" value={person.id} />
           <input type="hidden" name="roleId" value={person.roleId ?? ""} />
           <input type="hidden" name="approved" value={person.approved ? "on" : "off"} />
           <input type="hidden" name="active" value={person.active !== false ? "on" : "off"} />
-          <div>
-            <label>Nombre</label>
-            <input
-              name="name"
-              defaultValue={person.name}
-              required
-              className="input-compact w-full"
-            />
-          </div>
-          <div>
-            <label>Celular</label>
-            <input
-              name="phone"
-              defaultValue={person.phone}
-              required
-              className="input-compact w-full"
-            />
-          </div>
-          <div>
-            <label>Nueva contraseña (opcional)</label>
-            <input name="password" type="password" minLength={6} className="input-compact w-full" />
-          </div>
-          <div>
-            <label>Confirmar contraseña</label>
-            <input
-              name="passwordConfirm"
-              type="password"
-              minLength={6}
-              className="input-compact w-full"
-            />
+          <div className="form-grid-compact">
+            <div>
+              <label>Nombre</label>
+              <input
+                name="name"
+                defaultValue={person.name}
+                required
+                className="input-compact"
+              />
+            </div>
+            <div>
+              <label>Celular</label>
+              <input
+                name="phone"
+                defaultValue={person.phone}
+                required
+                className="input-compact"
+              />
+            </div>
+            <div>
+              <label>Nueva contraseña (opcional)</label>
+              <input name="password" type="password" minLength={6} className="input-compact" />
+            </div>
+            <div>
+              <label>Confirmar contraseña</label>
+              <input
+                name="passwordConfirm"
+                type="password"
+                minLength={6}
+                className="input-compact"
+              />
+            </div>
           </div>
           <button className="btn btn-primary" type="submit">
             Guardar datos
           </button>
         </form>
 
-        <form action={updateUserRoleAction as never} className="card space-y-3 p-4 sm:p-5">
+        <form action={updateUserRoleAction as never} className="card admin-form space-y-3 p-4 sm:p-6">
           <h2 className="display text-lg">Rol</h2>
           <input type="hidden" name="id" value={person.id} />
           <select
             name="roleId"
             defaultValue={person.roleId ?? ""}
             required
-            className="input-compact w-full max-w-xs"
+            className="input-compact"
           >
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
@@ -95,7 +97,7 @@ export default async function EditPersonaPage({
         </form>
 
         {person.role === "driver" ? (
-          <form action={assignBusetaAction} className="card space-y-3 p-4 sm:p-5">
+          <form action={assignBusetaAction} className="card admin-form space-y-3 p-4 sm:p-6">
             <h2 className="display text-lg">Buseta</h2>
             <p className="text-sm text-muted">
               Si otro conductor la tenía, queda liberado al guardar.
@@ -104,7 +106,7 @@ export default async function EditPersonaPage({
             <select
               name="busetaId"
               defaultValue={person.busetaId ?? ""}
-              className="input-compact w-full max-w-xs"
+              className="input-compact"
             >
               <option value="">Sin asignar</option>
               {busetas.map((b) => (
@@ -120,7 +122,7 @@ export default async function EditPersonaPage({
         ) : null}
 
         {person.role === "operator" || person.role === "admin" ? (
-          <form action={assignPuntoAction as never} className="card space-y-3 p-4 sm:p-5">
+          <form action={assignPuntoAction as never} className="card admin-form space-y-3 p-4 sm:p-6">
             <h2 className="display text-lg">Punto que gestiona</h2>
             <p className="text-sm text-muted">
               Fija el panel de punto sin tener que elegirlo cada vez.
@@ -129,7 +131,7 @@ export default async function EditPersonaPage({
             <select
               name="puntoId"
               defaultValue={person.puntoId ?? ""}
-              className="input-compact w-full max-w-xs"
+              className="input-compact"
             >
               <option value="">Sin asignar</option>
               {puntos

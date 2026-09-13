@@ -18,17 +18,17 @@ export function RecorridoForm({
   );
 
   return (
-    <form action={saveRecorridoAction as never} className="space-y-3">
+    <form action={saveRecorridoAction as never} className="space-y-4">
       {recorrido ? <input type="hidden" name="id" value={recorrido.id} /> : null}
       <div className="form-grid-compact">
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-2 lg:col-span-3">
           <label>Nombre del recorrido</label>
           <input
             name="name"
             required
             defaultValue={recorrido?.name}
             placeholder="Ruta Sur"
-            className="input-compact w-full max-w-md"
+            className="input-compact"
           />
         </div>
       </div>
@@ -37,8 +37,11 @@ export function RecorridoForm({
           Puntos · minutos desde el anterior
         </p>
         {rows.map((row, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-2">
-            <span className="w-5 text-sm text-muted">{i + 1}.</span>
+          <div
+            key={i}
+            className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[auto_minmax(12rem,1fr)_6rem_auto] sm:gap-3"
+          >
+            <span className="pb-2 text-sm text-muted">{i + 1}.</span>
             <select
               name="puntoId"
               value={row.puntoId}
@@ -47,7 +50,7 @@ export function RecorridoForm({
                 next[i] = { ...next[i], puntoId: e.target.value };
                 setRows(next);
               }}
-              className="input-compact max-w-[14rem]"
+              className="input-compact w-full"
             >
               {puntos.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -56,28 +59,32 @@ export function RecorridoForm({
                 </option>
               ))}
             </select>
-            <input
-              name="tiempoEsperadoMin"
-              type="number"
-              min={0}
-              value={row.tiempoEsperadoMin}
-              onChange={(e) => {
-                const next = [...rows];
-                next[i] = { ...next[i], tiempoEsperadoMin: Number(e.target.value) };
-                setRows(next);
-              }}
-              className="input-compact w-20"
-            />
-            <span className="text-sm text-muted">min</span>
+            <div className="flex items-end gap-2">
+              <input
+                name="tiempoEsperadoMin"
+                type="number"
+                min={0}
+                value={row.tiempoEsperadoMin}
+                onChange={(e) => {
+                  const next = [...rows];
+                  next[i] = { ...next[i], tiempoEsperadoMin: Number(e.target.value) };
+                  setRows(next);
+                }}
+                className="input-compact w-full"
+              />
+              <span className="pb-2 text-sm text-muted">min</span>
+            </div>
             {rows.length > 1 ? (
               <button
                 type="button"
-                className="text-sm text-signal"
+                className="btn btn-ghost text-sm text-signal sm:mb-0.5"
                 onClick={() => setRows(rows.filter((_, j) => j !== i))}
               >
                 Quitar
               </button>
-            ) : null}
+            ) : (
+              <span className="hidden sm:block" />
+            )}
           </div>
         ))}
         <button
@@ -97,9 +104,11 @@ export function RecorridoForm({
           Agregar punto
         </button>
       </div>
-      <button className="btn btn-primary" type="submit">
-        {recorrido ? "Guardar cambios" : "Crear recorrido"}
-      </button>
+      <div className="admin-form-actions">
+        <button className="btn btn-primary" type="submit">
+          {recorrido ? "Guardar cambios" : "Crear recorrido"}
+        </button>
+      </div>
     </form>
   );
 }

@@ -173,9 +173,15 @@ button.icon-btn.danger {
 
 .form-grid-compact {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.75rem 1rem;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   align-items: end;
+}
+
+@media (min-width: 640px) {
+  .form-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  }
 }
 
 .stack-cards {
@@ -212,6 +218,30 @@ button.icon-btn.danger {
   background: var(--paper);
 }
 
+/* Full-width admin create/edit forms */
+.admin-form {
+  width: 100%;
+  max-width: none;
+}
+
+.admin-form .form-grid-compact {
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.admin-form input.input-compact,
+.admin-form select.input-compact,
+.admin-form textarea.input-compact {
+  width: 100%;
+  max-width: none;
+}
+
+.admin-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
 @media (max-width: 640px) {
   .display {
     letter-spacing: -0.02em;
@@ -223,5 +253,9 @@ button.icon-btn.danger {
   td {
     padding: 0.65rem 0.4rem;
     font-size: 0.9rem;
+  }
+  .admin-form-actions .btn {
+    flex: 1 1 auto;
+    min-width: 8rem;
   }
 }

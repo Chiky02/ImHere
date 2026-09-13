@@ -73,7 +73,7 @@ export default async function HorariosPage({
           placeholder="Buscar…"
         />
         <div className="overflow-x-auto">
-          <table className="w-full max-w-5xl">
+          <table className="w-full">
             <thead>
               <tr>
                 <th>Recorrido</th>

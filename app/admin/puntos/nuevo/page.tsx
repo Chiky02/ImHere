@@ -19,7 +19,7 @@ export default async function NuevoPuntoPage() {
   return (
     <AppShell user={user}>
       <PageTitle title="Nuevo punto" subtitle="Número de cruce y gestores del panel." />
-      <form action={savePuntoAction as never} className="card max-w-xl space-y-3 p-4 sm:p-5">
+      <form action={savePuntoAction as never} className="card admin-form space-y-4 p-4 sm:p-6">
         <div className="form-grid-compact">
           <div>
             <label>Número</label>
@@ -29,21 +29,21 @@ export default async function NuevoPuntoPage() {
               min={1}
               defaultValue={nextNumero}
               required
-              className="input-compact w-24"
+              className="input-compact"
             />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label>Nombre</label>
-            <input name="name" required placeholder="El Recreo" className="input-compact w-full" />
+            <input name="name" required placeholder="El Recreo" className="input-compact" />
           </div>
           <div className="sm:col-span-2">
             <label>Dirección</label>
-            <input name="address" placeholder="Referencia" className="input-compact w-full" />
+            <input name="address" placeholder="Referencia" className="input-compact" />
           </div>
         </div>
         <div>
           <label>Operadores / admin gestores</label>
-          <div className="flex flex-wrap gap-3">
+          <div className="mt-1 flex flex-wrap gap-3">
             {operators.map((op) => (
               <label key={op.id} className="m-0 flex items-center gap-2 normal-case tracking-normal">
                 <input type="checkbox" name="operatorIds" value={op.id} className="w-auto" />
@@ -52,7 +52,7 @@ export default async function NuevoPuntoPage() {
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="admin-form-actions">
           <button className="btn btn-primary" type="submit">
             Crear punto
           </button>

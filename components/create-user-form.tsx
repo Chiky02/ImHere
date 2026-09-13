@@ -33,7 +33,7 @@ export function CreateUserForm({
       message="Se creará el perfil con el rol y contraseña indicados."
       confirmLabel="Crear usuario"
       tone="default"
-      className="card space-y-3 p-4 sm:p-5"
+      className="card admin-form space-y-3 p-4 sm:p-6"
     >
       <h2 className="display text-xl">Nuevo usuario</h2>
       {state?.error ? (
