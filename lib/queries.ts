@@ -179,6 +179,7 @@ export async function driverSnapshot(user: SessionUser) {
           ? expectedAtPunto(horario, recorrido, step.puntoId, salidaHoy)
           : undefined,
       pendingAlerta: step.pendingAlerta,
+      arrived: step.arrived,
       done: step.done,
     };
   });

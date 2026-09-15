@@ -720,9 +720,18 @@ export async function avisoProximidadAction(formData: FormData) {
       const progress = annotateRouteProgress(ordered, alertas, user.id);
       const idx = currentRouteStepIndex(progress);
       if (idx < 0) {
-        return { error: "Ya avisaste todos los puntos de tu recorrido de hoy." };
+        return {
+          error:
+            "Ya completaste todos los cruces de tu recorrido de hoy (llegadas registradas).",
+        };
       }
       const current = progress[idx];
+      if (current.pendingAlerta) {
+        return {
+          error:
+            "Ya avisaste este punto. Espera a que el operador registre la llegada para continuar.",
+        };
+      }
       if (current.puntoId !== puntoId) {
         return {
           error:

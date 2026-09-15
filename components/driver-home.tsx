@@ -22,6 +22,7 @@ type Step = {
   tiempoEsperadoMin: number;
   esperado?: string;
   pendingAlerta: boolean;
+  arrived?: boolean;
   done?: boolean;
 };
 
@@ -139,7 +140,8 @@ export function DriverHome({
   const notes = paginate(inbox, inboxPage, 10);
   const canAlert = approved && Boolean(busetaCodigo);
   const active = activeIndex >= 0 ? steps[activeIndex] : undefined;
-  const doneSteps = steps.filter((s) => s.done);
+  const arrivedSteps = steps.filter((s) => s.arrived || (s.done && !s.pendingAlerta));
+  const waitingSteps = steps.filter((s) => s.pendingAlerta);
   const upcoming = steps.filter((_, i) => activeIndex >= 0 && i > activeIndex);
   const total = steps.length;
   const position = activeIndex >= 0 ? activeIndex + 1 : total;
@@ -156,7 +158,10 @@ export function DriverHome({
   function disabledReason(step: Step) {
     if (!approved) return "Tu perfil aún no está aprobado.";
     if (!busetaCodigo) return "Aún no tienes buseta asignada.";
-    if (step.pendingAlerta) return "Ya enviaste el aviso de este punto.";
+    if (step.pendingAlerta) {
+      return "Ya avisaste. El operador debe registrar la llegada para liberar el siguiente cruce.";
+    }
+    if (step.arrived || step.done) return "Este cruce ya fue registrado.";
     return null;
   }
 
@@ -249,24 +254,42 @@ export function DriverHome({
                   </p>
                 ) : null}
               </div>
-              <Badge tone="warn">Activo</Badge>
+              <Badge tone={active.pendingAlerta ? "warn" : "ok"}>
+                {active.pendingAlerta ? "En cola" : "Activo"}
+              </Badge>
             </div>
-            <AvisoButton
-              key={`aviso-${active.puntoId}-${active.orden}-${activeIndex}`}
-              puntoId={active.puntoId}
-              canAlert={canAlert}
-              pendingAlerta={active.pendingAlerta}
-              disabledReason={disabledReason(active)}
-            />
-            <p className="mt-3 text-xs text-muted">
-              Al avisar, este cruce pasa a la cola y se habilita el siguiente
-              {upcoming.length ? ` (#${upcoming[0].puntoNumero ?? upcoming[0].orden} ${upcoming[0].puntoName})` : ""}.
-            </p>
+            {active.pendingAlerta ? (
+              <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-950">
+                <p className="font-semibold">Aviso enviado</p>
+                <p className="mt-1">
+                  Esperando que el operador de este punto registre la llegada.
+                  Cuando lo haga, se habilitará el siguiente cruce
+                  {upcoming.length
+                    ? ` (#${upcoming[0].puntoNumero ?? upcoming[0].orden} ${upcoming[0].puntoName})`
+                    : ""}
+                  .
+                </p>
+              </div>
+            ) : (
+              <>
+                <AvisoButton
+                  key={`aviso-${active.puntoId}-${active.orden}-${activeIndex}`}
+                  puntoId={active.puntoId}
+                  canAlert={canAlert}
+                  pendingAlerta={false}
+                  disabledReason={disabledReason(active)}
+                />
+                <p className="mt-3 text-xs text-muted">
+                  Al avisar, el punto lo ve en cola. El siguiente cruce se libera
+                  cuando registren tu llegada.
+                </p>
+              </>
+            )}
           </article>
         ) : (
           <div className="card p-5 text-forest">
             Completaste los {total} cruce{total === 1 ? "" : "s"} de tu recorrido
-            de hoy.
+            de hoy (todas las llegadas registradas).
             {total <= 1 ? (
               <p className="mt-2 text-sm text-muted">
                 Si deberían haber más paradas, el admin debe agregarlas al
@@ -276,18 +299,34 @@ export function DriverHome({
           </div>
         )}
 
-        {doneSteps.length > 0 ? (
+        {arrivedSteps.length > 0 ? (
           <div className="card p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              Ya avisados
+              Llegadas registradas
             </p>
             <ul className="space-y-1 text-sm text-muted">
-              {doneSteps.map((s, i) => (
-                <li key={`${s.puntoId}-done-${i}`}>
+              {arrivedSteps.map((s, i) => (
+                <li key={`${s.puntoId}-arr-${i}`}>
                   ✓ Cruce {steps.indexOf(s) + 1}
                   {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
                   {s.puntoName}
-                  {s.pendingAlerta ? " · en cola del punto" : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {waitingSteps.length > 0 && !active?.pendingAlerta ? (
+          <div className="card p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              En cola del punto
+            </p>
+            <ul className="space-y-1 text-sm text-muted">
+              {waitingSteps.map((s, i) => (
+                <li key={`${s.puntoId}-wait-${i}`}>
+                  … Cruce {steps.indexOf(s) + 1}
+                  {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
+                  {s.puntoName}
                 </li>
               ))}
             </ul>
@@ -297,7 +336,7 @@ export function DriverHome({
         {upcoming.length > 0 ? (
           <div className="card p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              Después
+              Pendientes (se abren tras registrar llegada)
             </p>
             <ul className="space-y-1 text-sm text-muted">
               {upcoming.map((s, i) => (
