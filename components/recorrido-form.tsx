@@ -4,6 +4,11 @@ import { useState } from "react";
 import { saveRecorridoAction } from "@/lib/actions";
 import type { Punto, Recorrido } from "@/lib/types";
 
+function nextPuntoId(puntos: Punto[], used: string[]) {
+  const free = puntos.find((p) => !used.includes(p.id));
+  return free?.id ?? puntos[0]?.id ?? "";
+}
+
 export function RecorridoForm({
   puntos,
   recorrido,
@@ -11,10 +16,19 @@ export function RecorridoForm({
   puntos: Punto[];
   recorrido?: Recorrido;
 }) {
+  const sortedPuntos = [...puntos].sort(
+    (a, b) => (a.numero ?? 9999) - (b.numero ?? 9999) || a.name.localeCompare(b.name),
+  );
   const [rows, setRows] = useState(
     recorrido?.puntos.length
-      ? recorrido.puntos
-      : [{ puntoId: puntos[0]?.id ?? "", orden: 1, tiempoEsperadoMin: 30 }],
+      ? [...recorrido.puntos].sort((a, b) => a.orden - b.orden)
+      : [
+          {
+            puntoId: sortedPuntos[0]?.id ?? "",
+            orden: 1,
+            tiempoEsperadoMin: 30,
+          },
+        ],
   );
 
   return (
@@ -34,14 +48,18 @@ export function RecorridoForm({
       </div>
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Puntos · minutos desde el anterior
+          Puntos en orden · minutos desde el anterior
+        </p>
+        <p className="text-sm text-muted">
+          Cada fila es un cruce distinto del recorrido. El conductor avisará en
+          este mismo orden.
         </p>
         {rows.map((row, i) => (
           <div
-            key={i}
+            key={`${row.orden}-${i}`}
             className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[auto_minmax(12rem,1fr)_6rem_auto] sm:gap-3"
           >
-            <span className="pb-2 text-sm text-muted">{i + 1}.</span>
+            <span className="pb-2 text-sm font-semibold text-muted">{i + 1}.</span>
             <select
               name="puntoId"
               value={row.puntoId}
@@ -52,7 +70,7 @@ export function RecorridoForm({
               }}
               className="input-compact w-full"
             >
-              {puntos.map((p) => (
+              {sortedPuntos.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.numero != null ? `#${p.numero} · ` : ""}
                   {p.name}
@@ -67,7 +85,10 @@ export function RecorridoForm({
                 value={row.tiempoEsperadoMin}
                 onChange={(e) => {
                   const next = [...rows];
-                  next[i] = { ...next[i], tiempoEsperadoMin: Number(e.target.value) };
+                  next[i] = {
+                    ...next[i],
+                    tiempoEsperadoMin: Number(e.target.value),
+                  };
                   setRows(next);
                 }}
                 className="input-compact w-full"
@@ -90,16 +111,17 @@ export function RecorridoForm({
         <button
           type="button"
           className="btn btn-ghost text-sm"
-          onClick={() =>
+          onClick={() => {
+            const used = rows.map((r) => r.puntoId);
             setRows([
               ...rows,
               {
-                puntoId: puntos[0]?.id ?? "",
+                puntoId: nextPuntoId(sortedPuntos, used),
                 orden: rows.length + 1,
                 tiempoEsperadoMin: 20,
               },
-            ])
-          }
+            ]);
+          }}
         >
           Agregar punto
         </button>

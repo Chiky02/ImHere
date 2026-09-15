@@ -11,8 +11,9 @@ import {
 } from "./permissions";
 import * as repo from "./repo";
 import { horarioHoy } from "./schedule";
+import { annotateRouteProgress, currentRouteStepIndex } from "./route-progress";
 import { clearSessionCookie, homeForRole, readSession, setSessionCookie } from "./session";
-import { nowIso, todayDate } from "./time";
+import { nowIso, todayDate, isTodayBogota } from "./time";
 import { notifyDriver } from "./push";
 import type {
   AppRole,
@@ -344,7 +345,10 @@ export async function saveUserAction(formData: FormData) {
   revalidatePath("/admin/conductores");
   revalidatePath("/admin/puntos");
   revalidatePath("/operador");
-  redirect("/admin/conductores");
+  return {
+    ok: true as const,
+    message: isNew ? "Usuario creado correctamente." : "Usuario actualizado.",
+  };
 }
 
 export async function assignPuntoAction(formData: FormData) {
@@ -553,14 +557,20 @@ export async function deleteUserAction(formData: FormData) {
 
 export async function approveDriverAction(formData: FormData) {
   await admin();
-  const user = await repo.getUserById(String(formData.get("id")));
-  if (!user) return;
-  user.approved = true;
-  const busetaId = String(formData.get("busetaId") ?? "");
-  await repo.upsertUser(user);
-  if (busetaId) await claimBusetaExclusive(user.id, busetaId);
+  try {
+    const user = await repo.getUserById(String(formData.get("id")));
+    if (!user) return { error: "Usuario no encontrado." };
+    user.approved = true;
+    const busetaId = String(formData.get("busetaId") ?? "").trim();
+    await repo.upsertUser(user);
+    if (busetaId) await claimBusetaExclusive(user.id, busetaId);
+  } catch (err) {
+    console.error("approveDriverAction", err);
+    return { error: "No se pudo aprobar al conductor." };
+  }
   revalidatePath("/admin/conductores");
   revalidatePath("/admin/busetas");
+  return { ok: true as const };
 }
 
 export async function assignBusetaAction(formData: FormData) {
@@ -707,19 +717,12 @@ export async function avisoProximidadAction(formData: FormData) {
       (a, b) => a.orden - b.orden,
     );
     if (ordered.length) {
-      const current = ordered.find((step) => {
-        const done = alertas.some(
-          (a) =>
-            a.conductorId === user.id &&
-            a.puntoId === step.puntoId &&
-            (a.status === "pending" || a.status === "arrived") &&
-            isTodayIso(a.createdAt),
-        );
-        return !done;
-      });
-      if (!current) {
+      const progress = annotateRouteProgress(ordered, alertas, user.id);
+      const idx = currentRouteStepIndex(progress);
+      if (idx < 0) {
         return { error: "Ya avisaste todos los puntos de tu recorrido de hoy." };
       }
+      const current = progress[idx];
       if (current.puntoId !== puntoId) {
         return {
           error:
@@ -732,7 +735,8 @@ export async function avisoProximidadAction(formData: FormData) {
       (a) =>
         a.conductorId === user.id &&
         a.puntoId === puntoId &&
-        a.status === "pending",
+        a.status === "pending" &&
+        isTodayBogota(a.createdAt),
     );
     if (pending) return { error: "Ya avisaste que vas hacia ese punto." };
     await repo.insertAlerta({
@@ -760,16 +764,6 @@ export async function avisoProximidadAction(formData: FormData) {
         "No se pudo enviar el aviso. Revisa la conexión e inténtalo de nuevo.",
     };
   }
-}
-
-function isTodayIso(iso: string) {
-  const d = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Bogota",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(iso));
-  return d === todayDate();
 }
 
 export async function registrarLlegadaAction(formData: FormData) {

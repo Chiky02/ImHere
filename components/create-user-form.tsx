@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect } from "react";
 import { saveUserAction } from "@/lib/actions";
 import { ConfirmForm } from "./confirm-form";
 
@@ -17,11 +18,33 @@ export function CreateUserForm({
   puntos?: PuntoOpt[];
   roles: RoleOpt[];
 }) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
-    async (_prev: { error?: string; ok?: boolean; message?: string } | null, fd: FormData) =>
-      (await saveUserAction(fd)) ?? null,
+    async (
+      _prev: { error?: string; ok?: boolean; message?: string } | null,
+      fd: FormData,
+    ) => {
+      try {
+        return (await saveUserAction(fd)) ?? null;
+      } catch (err) {
+        // redirect() throws; never wrap redirects here
+        const digest = err && typeof err === "object" && "digest" in err
+          ? String((err as { digest?: string }).digest)
+          : "";
+        if (digest.startsWith("NEXT_REDIRECT")) throw err;
+        console.error(err);
+        return { error: "No se pudo crear el usuario." };
+      }
+    },
     null,
   );
+
+  useEffect(() => {
+    if (state?.ok) {
+      router.push("/admin/conductores");
+      router.refresh();
+    }
+  }, [state?.ok, router]);
 
   const defaultRole =
     roles.find((r) => r.home === "driver")?.id ?? roles[0]?.id ?? "";
@@ -39,6 +62,11 @@ export function CreateUserForm({
       {state?.error ? (
         <p className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-signal">
           {state.error}
+        </p>
+      ) : null}
+      {state?.ok ? (
+        <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {state.message ?? "Usuario creado. Redirigiendo…"}
         </p>
       ) : null}
       <input type="hidden" name="approved" value="on" />

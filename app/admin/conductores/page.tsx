@@ -2,15 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminListHeader } from "@/components/admin-list-header";
 import { AppShell } from "@/components/app-shell";
+import { ApproveDriverCard } from "@/components/approve-driver-card";
 import { IconEdit, IconTrash } from "@/components/action-icons";
 import { ConfirmForm } from "@/components/confirm-form";
 import { ListToolbar } from "@/components/list-toolbar";
 import { PaginationNav } from "@/components/pagination";
 import { Badge } from "@/components/ui";
-import {
-  approveDriverAction,
-  deleteUserAction,
-} from "@/lib/actions";
+import { deleteUserAction } from "@/lib/actions";
 import { listQuery } from "@/lib/list-query";
 import * as repo from "@/lib/repo";
 import { readSession } from "@/lib/session";
@@ -65,35 +63,14 @@ export default async function ConductoresPage({
         <section className="mb-6 space-y-3">
           <h2 className="display text-xl">Por aprobar</h2>
           {pending.map((d) => (
-            <ConfirmForm
+            <ApproveDriverCard
               key={d.id}
-              action={approveDriverAction}
-              title={`¿Aprobar a ${d.name}?`}
-              message="Al asignar buseta se libera al conductor anterior."
-              confirmLabel="Aprobar"
-              tone="default"
-              className="card flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end"
-            >
-              <input type="hidden" name="id" value={d.id} />
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">{d.name}</p>
-                <p className="text-sm text-muted">{d.phone}</p>
-              </div>
-              <div>
-                <label>Buseta</label>
-                <select name="busetaId" defaultValue="" className="input-compact">
-                  <option value="">Sin asignar</option>
-                  {busetas.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.codigo}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button className="btn btn-primary" type="submit">
-                Aprobar
-              </button>
-            </ConfirmForm>
+              id={d.id}
+              name={d.name}
+              phone={d.phone}
+              defaultBusetaId={d.busetaId}
+              busetas={busetas.map((b) => ({ id: b.id, codigo: b.codigo }))}
+            />
           ))}
         </section>
       ) : null}

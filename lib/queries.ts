@@ -1,5 +1,6 @@
 import * as repo from "./repo";
 import { horarioHoy, expectedAtPunto } from "./schedule";
+import { annotateRouteProgress, currentRouteStepIndex } from "./route-progress";
 import {
   dateInBogota,
   formatDiffMinutes,
@@ -7,17 +8,12 @@ import {
   minutesDiff,
   punctuality,
   todayDate,
+  isTodayBogota,
 } from "./time";
 import type { SessionUser } from "./types";
 
 function isToday(iso: string) {
-  const d = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Bogota",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(iso));
-  return d === todayDate();
+  return isTodayBogota(iso);
 }
 
 export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
@@ -165,34 +161,28 @@ export async function driverSnapshot(user: SessionUser) {
     : recorridos.find((r) => r.active);
   const salidaHoy =
     dbUser?.salidaHoyFecha === todayDate() ? dbUser.salidaHoy : undefined;
-  const steps = (recorrido?.puntos ?? [])
+  const ordered = (recorrido?.puntos ?? [])
     .slice()
-    .sort((a, b) => a.orden - b.orden)
-    .map((step) => {
-      const punto = puntos.find((p) => p.id === step.puntoId);
-      const todayAlert = alertas.find(
-        (a) =>
-          a.conductorId === user.id &&
-          a.puntoId === step.puntoId &&
-          (a.status === "pending" || a.status === "arrived") &&
-          isToday(a.createdAt),
-      );
-      const pending = todayAlert?.status === "pending";
-      const done = Boolean(todayAlert);
-      return {
-        ...step,
-        puntoName: punto?.name ?? "Punto",
-        puntoAddress: punto?.address ?? "",
-        puntoNumero: punto?.numero,
-        esperado:
-          horario && recorrido
-            ? expectedAtPunto(horario, recorrido, step.puntoId, salidaHoy)
-            : undefined,
-        pendingAlerta: pending,
-        done,
-      };
-    });
-  const activeIndex = steps.findIndex((s) => !s.done);
+    .sort((a, b) => a.orden - b.orden);
+  const progress = annotateRouteProgress(ordered, alertas, user.id);
+  const steps = progress.map((step) => {
+    const punto = puntos.find((p) => p.id === step.puntoId);
+    return {
+      puntoId: step.puntoId,
+      orden: step.orden,
+      tiempoEsperadoMin: step.tiempoEsperadoMin,
+      puntoName: punto?.name ?? "Punto",
+      puntoAddress: punto?.address ?? "",
+      puntoNumero: punto?.numero,
+      esperado:
+        horario && recorrido
+          ? expectedAtPunto(horario, recorrido, step.puntoId, salidaHoy)
+          : undefined,
+      pendingAlerta: step.pendingAlerta,
+      done: step.done,
+    };
+  });
+  const activeIndex = currentRouteStepIndex(steps);
   const inbox = notificaciones.filter((n) => n.userId === user.id);
   return {
     dbUser,

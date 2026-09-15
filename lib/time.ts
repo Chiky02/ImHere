@@ -13,6 +13,21 @@ export function todayDate() {
   }).format(new Date());
 }
 
+/** Whether an ISO timestamp falls on "today" in America/Bogota. */
+export function isTodayBogota(iso: string) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return (
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d) === todayDate()
+  );
+}
+
 export function weekdayBogota() {
   const day = new Intl.DateTimeFormat("en-US", {
     timeZone: TZ,

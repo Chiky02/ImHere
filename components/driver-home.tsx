@@ -141,6 +141,8 @@ export function DriverHome({
   const active = activeIndex >= 0 ? steps[activeIndex] : undefined;
   const doneSteps = steps.filter((s) => s.done);
   const upcoming = steps.filter((_, i) => activeIndex >= 0 && i > activeIndex);
+  const total = steps.length;
+  const position = activeIndex >= 0 ? activeIndex + 1 : total;
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 4000);
@@ -229,12 +231,15 @@ export function DriverHome({
             No hay puntos en tu recorrido. El admin debe armar la ruta.
           </div>
         ) : active ? (
-          <article className="card border-2 border-[var(--forest)] p-5">
+          <article
+            key={`${active.puntoId}-${active.orden}-${activeIndex}`}
+            className="card border-2 border-[var(--forest)] p-5"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Siguiente cruce · Punto{" "}
-                  {active.puntoNumero ?? active.orden}
+                  Cruce {position} de {total}
+                  {active.puntoNumero != null ? ` · Punto #${active.puntoNumero}` : ""}
                 </p>
                 <h2 className="display text-2xl">{active.puntoName}</h2>
                 <p className="text-sm text-muted">{active.puntoAddress}</p>
@@ -247,18 +252,27 @@ export function DriverHome({
               <Badge tone="warn">Activo</Badge>
             </div>
             <AvisoButton
+              key={`aviso-${active.puntoId}-${active.orden}-${activeIndex}`}
               puntoId={active.puntoId}
               canAlert={canAlert}
               pendingAlerta={active.pendingAlerta}
               disabledReason={disabledReason(active)}
             />
             <p className="mt-3 text-xs text-muted">
-              Al avisar, este punto pasa a la cola y se habilita el siguiente.
+              Al avisar, este cruce pasa a la cola y se habilita el siguiente
+              {upcoming.length ? ` (#${upcoming[0].puntoNumero ?? upcoming[0].orden} ${upcoming[0].puntoName})` : ""}.
             </p>
           </article>
         ) : (
           <div className="card p-5 text-forest">
-            Completaste todos los avisos del recorrido de hoy.
+            Completaste los {total} cruce{total === 1 ? "" : "s"} de tu recorrido
+            de hoy.
+            {total <= 1 ? (
+              <p className="mt-2 text-sm text-muted">
+                Si deberían haber más paradas, el admin debe agregarlas al
+                recorrido (en orden) en Recorridos.
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -268,9 +282,11 @@ export function DriverHome({
               Ya avisados
             </p>
             <ul className="space-y-1 text-sm text-muted">
-              {doneSteps.map((s) => (
-                <li key={s.puntoId}>
-                  ✓ #{s.puntoNumero ?? s.orden} {s.puntoName}
+              {doneSteps.map((s, i) => (
+                <li key={`${s.puntoId}-done-${i}`}>
+                  ✓ Cruce {steps.indexOf(s) + 1}
+                  {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
+                  {s.puntoName}
                   {s.pendingAlerta ? " · en cola del punto" : ""}
                 </li>
               ))}
@@ -284,9 +300,11 @@ export function DriverHome({
               Después
             </p>
             <ul className="space-y-1 text-sm text-muted">
-              {upcoming.map((s) => (
-                <li key={s.puntoId}>
-                  #{s.puntoNumero ?? s.orden} {s.puntoName}
+              {upcoming.map((s, i) => (
+                <li key={`${s.puntoId}-up-${i}`}>
+                  Cruce {activeIndex + 2 + i}
+                  {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
+                  {s.puntoName}
                 </li>
               ))}
             </ul>
