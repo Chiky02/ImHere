@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   title: "Control de puntos",
   description: "Avisos de llegada y registro de cruces para recorridos de busetas",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg" }],
+  },
   appleWebApp: {
     capable: true,
     title: "Puntos",

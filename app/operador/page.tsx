@@ -18,7 +18,7 @@ export default async function OperadorPage({
     <AppShell user={user}>
       <PageTitle
         title={snap.selected ? snap.selected.name : "Panel del punto"}
-        subtitle="Mantén esta pantalla abierta. Activa el sonido para salir a tiempo."
+        subtitle="Activa el sonido una vez. El aviso llega al celular cuando un bus pulsa el cruce."
       />
       <OperatorPanel initial={snap} initialPuntoId={punto} />
     </AppShell>

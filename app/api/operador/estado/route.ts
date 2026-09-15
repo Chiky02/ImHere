@@ -9,5 +9,7 @@ export async function GET(request: NextRequest) {
   }
   const puntoId = request.nextUrl.searchParams.get("puntoId") ?? undefined;
   const snap = await operatorSnapshot(user, puntoId);
-  return NextResponse.json(snap);
+  return NextResponse.json(snap, {
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }

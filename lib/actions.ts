@@ -25,7 +25,7 @@ import {
   setSessionCookie,
 } from "./session";
 import { nowIso, todayDate, isTodayBogota } from "./time";
-import { notifyDriver } from "./push";
+import { notifyDriver, notifyDriverCruce, notifyPuntoOperators } from "./push";
 import type {
   AppRole,
   Buseta,
@@ -789,6 +789,22 @@ export async function avisoProximidadAction(formData: FormData) {
       createdAt: nowIso(),
       status: "pending",
     });
+    const [buseta, punto] = await Promise.all([
+      repo.getBuseta(user.busetaId),
+      repo.getPunto(puntoId),
+    ]);
+    try {
+      await notifyPuntoOperators({
+        puntoId,
+        title: "¡Bus en camino!",
+        body: `Buseta ${buseta?.codigo ?? ""} · ${user.name}${
+          punto?.name ? ` · ${punto.name}` : ""
+        }`,
+        exceptUserId: user.id,
+      });
+    } catch (err) {
+      console.error("notifyPuntoOperators", err);
+    }
     // Refresh cookie so next loads see approved + buseta immediately.
     if (
       session.approved !== user.approved ||
@@ -842,6 +858,17 @@ export async function registrarLlegadaAction(formData: FormData) {
   });
   if (alertaId) await repo.updateAlerta(alertaId, { status: "arrived" });
   await dispatchCruceNotify(formData, registro.id, puntoId, hora, false);
+  try {
+    const punto = await repo.getPunto(puntoId);
+    await notifyDriverCruce({
+      conductorId,
+      puntoId,
+      title: "Cruce registrado",
+      body: `Registraron tu llegada en ${punto?.name ?? "el punto"}.`,
+    });
+  } catch (err) {
+    console.error("notifyDriverCruce", err);
+  }
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");
@@ -1001,6 +1028,17 @@ export async function registrarCruceManualAction(formData: FormData) {
     createdAt: nowIso(),
   });
   await dispatchCruceNotify(formData, registro.id, puntoId, hora, false);
+  try {
+    const punto = await repo.getPunto(puntoId);
+    await notifyDriverCruce({
+      conductorId,
+      puntoId,
+      title: "Cruce registrado",
+      body: `Registraron tu llegada en ${punto?.name ?? "el punto"}.`,
+    });
+  } catch (err) {
+    console.error("notifyDriverCruce", err);
+  }
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");

@@ -10,8 +10,10 @@ import {
 import { AlertPlayer } from "@/lib/alert-sound";
 import { paginate } from "@/lib/pagination";
 import type { operatorSnapshot } from "@/lib/queries";
+import { enableWebPush } from "./enable-web-push";
 import { ClientPagination } from "./pagination";
 import { Badge } from "./ui";
+import { useOnVisible, usePushEvents } from "./use-live-sync";
 
 type Snapshot = Awaited<ReturnType<typeof operatorSnapshot>>;
 
@@ -197,8 +199,6 @@ export function OperatorPanel({
 
   useEffect(() => {
     void refreshAlertSound();
-    const id = setInterval(() => void refreshAlertSound(), 15000);
-    return () => clearInterval(id);
   }, []);
 
   function stopRing() {
@@ -207,26 +207,30 @@ export function OperatorPanel({
   }
 
   async function startRing() {
-    try {
-      const res = await fetch("/api/config/alert-sound", { cache: "no-store" });
-      if (res.ok) {
-        const cfg = (await res.json()) as { alertSoundUrl?: string };
-        if (cfg.alertSoundUrl) {
-          setAlertSrc(cfg.alertSoundUrl);
-          playerRef.current?.forceSource(cfg.alertSoundUrl);
-          const ok = await playerRef.current?.ring({
-            loop: true,
-            src: cfg.alertSoundUrl,
-          });
-          if (ok) setRinging(true);
-          return;
-        }
-      }
-    } catch {
-      /* fall through */
-    }
     const ok = await playerRef.current?.ring({ loop: true, src: alertSrc });
     if (ok) setRinging(true);
+  }
+
+  async function refreshEstado() {
+    if (!puntoId) return;
+    const res = await fetch(
+      `/api/operador/estado?puntoId=${encodeURIComponent(puntoId)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return;
+    const next = (await res.json()) as Snapshot;
+    if (!primed.current) {
+      next.incoming.forEach((a) => seen.current.add(a.id));
+      primed.current = true;
+    } else {
+      const newcomers = next.incoming.filter((a) => !seen.current.has(a.id));
+      if (newcomers.length && playerRef.current?.isUnlocked) {
+        void startRing();
+      }
+      next.incoming.forEach((a) => seen.current.add(a.id));
+    }
+    if (next.incoming.length === 0) stopRing();
+    setData(next);
   }
 
   useEffect(() => {
@@ -234,41 +238,31 @@ export function OperatorPanel({
     seen.current = new Set();
     setBitacoraPage(1);
     stopRing();
-    let alive = true;
-    const tick = async () => {
-      const res = await fetch(
-        `/api/operador/estado?puntoId=${encodeURIComponent(puntoId)}`,
-        { cache: "no-store" },
-      );
-      if (!res.ok || !alive) return;
-      const next = (await res.json()) as Snapshot;
-      if (!primed.current) {
-        next.incoming.forEach((a) => seen.current.add(a.id));
-        primed.current = true;
-      } else {
-        const newcomers = next.incoming.filter((a) => !seen.current.has(a.id));
-        if (newcomers.length && playerRef.current?.isUnlocked) {
-          void startRing();
-        }
-        next.incoming.forEach((a) => seen.current.add(a.id));
-      }
-      if (next.incoming.length === 0) stopRing();
-      setData(next);
-    };
-    const id = setInterval(tick, 1500);
-    tick();
-    return () => {
-      alive = false;
-      clearInterval(id);
-      stopRing();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de punto
+    void refreshEstado();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- al cambiar de punto
   }, [puntoId]);
+
+  useOnVisible(() => {
+    void refreshEstado();
+  });
+
+  usePushEvents((msg) => {
+    if (msg.type === "alerta") {
+      if (msg.puntoId && puntoId && msg.puntoId !== puntoId) return;
+      void startRing();
+    }
+    void refreshEstado();
+  });
 
   async function unlock() {
     await refreshAlertSound();
     const ok = await playerRef.current?.unlock(alertSrc);
     setSoundOn(Boolean(ok));
+    try {
+      await enableWebPush();
+    } catch {
+      /* push is optional if VAPID is missing */
+    }
   }
 
   const bitacora = paginate(data.bitacora, bitacoraPage, 10);
@@ -364,8 +358,9 @@ export function OperatorPanel({
 
       {!soundOn ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Pulsa <strong>Activar sonido</strong> una vez. Sin eso el navegador
-          bloquea la alarma. Puedes cambiar tu audio en{" "}
+          Pulsa <strong>Activar sonido</strong> una vez. Eso también activa los
+          avisos del celular: el panel se actualiza cuando un bus avisa, sin
+          estar pidiendo el servidor cada segundo. Puedes cambiar tu audio en{" "}
           <strong>Sonido</strong>.
         </p>
       ) : null}
@@ -382,7 +377,10 @@ export function OperatorPanel({
             drivers={data.drivers ?? []}
             busetas={data.busetasActivas ?? []}
             pending={pending}
-            onResult={setMsg}
+            onResult={(msg) => {
+              setMsg(msg);
+              void refreshEstado();
+            }}
           />
         ) : (
           <p className="text-muted">Elige un punto para anotar un cruce.</p>
@@ -443,6 +441,7 @@ export function OperatorPanel({
                       }
                       setMsg("Llegada registrada.");
                       stopRing();
+                      void refreshEstado();
                     });
                   }}
                 >
@@ -515,6 +514,7 @@ export function OperatorPanel({
                       fd.set("registroId", r.id);
                       const res = await updateRegistroCruceAction(fd);
                       setMsg(res?.error ?? "Registro actualizado.");
+                      void refreshEstado();
                     });
                   }}
                 >
@@ -556,6 +556,7 @@ export function OperatorPanel({
                       fd.set("registroId", r.id);
                       const res = await registrarSalidaAction(fd);
                       setMsg(res?.error ?? "Salida registrada.");
+                      void refreshEstado();
                     });
                   }}
                 >
@@ -646,6 +647,7 @@ export function OperatorPanel({
                           fd.set("registroId", r.id);
                           const res = await updateRegistroCruceAction(fd);
                           setMsg(res?.error ?? "Registro actualizado.");
+                      void refreshEstado();
                         });
                       }}
                     >

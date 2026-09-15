@@ -16,6 +16,7 @@ import { paginate } from "@/lib/pagination";
 import { ClientPagination } from "./pagination";
 import { Badge } from "./ui";
 import { PushToggle } from "./push-toggle";
+import { useOnVisible, usePushEvents } from "./use-live-sync";
 
 type RouteStop = {
   puntoId: string;
@@ -173,10 +174,14 @@ export function DriverHome({
   const canAlert = approved && Boolean(busetaCodigo);
   const total = routeStops.length;
 
-  useEffect(() => {
-    const id = setInterval(() => router.refresh(), 4000);
-    return () => clearInterval(id);
-  }, [router]);
+  useOnVisible(() => {
+    router.refresh();
+  });
+  usePushEvents((msg) => {
+    if (msg.type === "cruce" || msg.type === "inbox") {
+      router.refresh();
+    }
+  });
 
   useEffect(() => {
     if (inboxPage > notes.totalPages) setInboxPage(notes.totalPages);
