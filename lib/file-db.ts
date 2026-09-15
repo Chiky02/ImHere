@@ -30,6 +30,7 @@ function emptyDb(): Database {
     pushSubscriptions: [],
     settings: {
       alertSoundUrl: "/sounds/alerta.wav",
+      avisoCooldownSeconds: 180,
     },
     operatorAlertSettings: {},
     roles: systemRolesSeed(),
@@ -151,6 +152,7 @@ export function seedDb(): Database {
     pushSubscriptions: [],
     settings: {
       alertSoundUrl: "/sounds/alerta.wav",
+      avisoCooldownSeconds: 180,
     },
     operatorAlertSettings: {},
   };
@@ -191,7 +193,10 @@ export async function readDb(): Promise<Database> {
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as Database;
     if (!parsed.settings) {
-      parsed.settings = { alertSoundUrl: "/sounds/alerta.wav" };
+      parsed.settings = {
+        alertSoundUrl: "/sounds/alerta.wav",
+        avisoCooldownSeconds: 180,
+      };
     }
     if (!parsed.operatorAlertSettings) {
       parsed.operatorAlertSettings = {};

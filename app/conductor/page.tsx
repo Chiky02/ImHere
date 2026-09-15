@@ -46,8 +46,10 @@ export default async function ConductorPage() {
         }
         salidaHoy={snap.salidaHoy}
         tiempoViajeMin={snap.horario?.tiempoViajeMin}
-        steps={snap.steps}
-        activeIndex={snap.activeIndex}
+        routeStops={snap.routeStops}
+        avisoCooldownSeconds={snap.avisoCooldownSeconds}
+        plannedLaps={snap.plannedLaps}
+        routePatched={snap.routePatched}
         inbox={snap.inbox}
       />
     </AppShell>

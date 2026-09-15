@@ -8,22 +8,24 @@ import {
   markReadAction,
   setSalidaHoyAction,
 } from "@/lib/actions";
+import {
+  cooldownRemainingMs,
+  formatCooldown,
+} from "@/lib/aviso-cooldown";
 import { paginate } from "@/lib/pagination";
 import { ClientPagination } from "./pagination";
 import { Badge } from "./ui";
 import { PushToggle } from "./push-toggle";
 
-type Step = {
+type RouteStop = {
   puntoId: string;
   puntoName: string;
   puntoAddress: string;
   puntoNumero?: number;
   orden: number;
-  tiempoEsperadoMin: number;
   esperado?: string;
+  lastAlertAt?: string;
   pendingAlerta: boolean;
-  arrived?: boolean;
-  done?: boolean;
 };
 
 type Note = {
@@ -35,30 +37,50 @@ type Note = {
 };
 
 function SubmitLabel({
-  alreadySent,
+  remainingMs,
   idleLabel,
 }: {
-  alreadySent: boolean;
+  remainingMs: number;
   idleLabel: string;
 }) {
   const { pending } = useFormStatus();
   if (pending) return <>Enviando aviso…</>;
-  if (alreadySent) return <>Ya avisaste</>;
+  if (remainingMs > 0) return <>Espera {formatCooldown(remainingMs)}</>;
   return <>{idleLabel}</>;
 }
 
 function AvisoButton({
   puntoId,
   canAlert,
-  pendingAlerta,
+  lastAlertAt,
+  cooldownSeconds,
   disabledReason,
 }: {
   puntoId: string;
   canAlert: boolean;
-  pendingAlerta: boolean;
+  lastAlertAt?: string;
+  cooldownSeconds: number;
   disabledReason: string | null;
 }) {
   const router = useRouter();
+  const [localLastAt, setLocalLastAt] = useState(lastAlertAt);
+  const effectiveLast = localLastAt ?? lastAlertAt;
+  const [remaining, setRemaining] = useState(() =>
+    cooldownRemainingMs(effectiveLast, cooldownSeconds),
+  );
+
+  useEffect(() => {
+    setLocalLastAt(lastAlertAt);
+  }, [lastAlertAt]);
+
+  useEffect(() => {
+    const tick = () =>
+      setRemaining(cooldownRemainingMs(effectiveLast, cooldownSeconds));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [effectiveLast, cooldownSeconds]);
+
   const [state, formAction] = useActionState(
     async (
       _prev: { error?: string; ok?: boolean } | null,
@@ -68,6 +90,7 @@ function AvisoButton({
       try {
         const res = await avisoProximidadAction(formData);
         if (res?.error) return { error: res.error };
+        setLocalLastAt(new Date().toISOString());
         router.refresh();
         return { ok: true };
       } catch {
@@ -80,8 +103,8 @@ function AvisoButton({
     null,
   );
 
-  const sent = pendingAlerta || Boolean(state?.ok);
-  const blocked = !canAlert || sent;
+  const cooling = remaining > 0;
+  const blocked = !canAlert || cooling;
 
   return (
     <div className="mt-4">
@@ -93,13 +116,19 @@ function AvisoButton({
           title={disabledReason ?? undefined}
         >
           <SubmitLabel
-            alreadySent={sent}
+            remainingMs={remaining}
             idleLabel="Estoy próximo a llegar"
           />
         </button>
       </form>
-      {disabledReason && !sent ? (
+      {disabledReason && !cooling ? (
         <p className="mt-2 text-sm text-amber-800">{disabledReason}</p>
+      ) : null}
+      {cooling ? (
+        <p className="mt-2 text-sm text-muted">
+          Podrás volver a disparar la alarma de este punto en{" "}
+          {formatCooldown(remaining)}.
+        </p>
       ) : null}
       {state?.error ? (
         <p className="mt-2 rounded-xl bg-orange-50 px-3 py-2 text-sm text-signal">
@@ -121,30 +150,28 @@ export function DriverHome({
   horarioLabel,
   salidaHoy,
   tiempoViajeMin,
-  steps,
-  activeIndex = -1,
+  routeStops,
+  avisoCooldownSeconds = 180,
+  plannedLaps = 2,
+  routePatched = false,
   inbox,
 }: {
   approved: boolean;
   busetaCodigo?: string;
   horarioLabel?: string;
-  /** HH:MM declared by driver for today (optional) */
   salidaHoy?: string;
   tiempoViajeMin?: number;
-  steps: Step[];
-  activeIndex?: number;
+  routeStops: RouteStop[];
+  avisoCooldownSeconds?: number;
+  plannedLaps?: number;
+  routePatched?: boolean;
   inbox: Note[];
 }) {
   const [inboxPage, setInboxPage] = useState(1);
   const router = useRouter();
   const notes = paginate(inbox, inboxPage, 10);
   const canAlert = approved && Boolean(busetaCodigo);
-  const active = activeIndex >= 0 ? steps[activeIndex] : undefined;
-  const arrivedSteps = steps.filter((s) => s.arrived || (s.done && !s.pendingAlerta));
-  const waitingSteps = steps.filter((s) => s.pendingAlerta);
-  const upcoming = steps.filter((_, i) => activeIndex >= 0 && i > activeIndex);
-  const total = steps.length;
-  const position = activeIndex >= 0 ? activeIndex + 1 : total;
+  const total = routeStops.length;
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 4000);
@@ -155,13 +182,9 @@ export function DriverHome({
     if (inboxPage > notes.totalPages) setInboxPage(notes.totalPages);
   }, [inboxPage, notes.totalPages]);
 
-  function disabledReason(step: Step) {
+  function disabledReason() {
     if (!approved) return "Tu perfil aún no está aprobado.";
     if (!busetaCodigo) return "Aún no tienes buseta asignada.";
-    if (step.pendingAlerta) {
-      return "Ya avisaste. El operador debe registrar la llegada para liberar el siguiente cruce.";
-    }
-    if (step.arrived || step.done) return "Este cruce ya fue registrado.";
     return null;
   }
 
@@ -231,124 +254,63 @@ export function DriverHome({
       </div>
 
       <div className="space-y-3">
-        {steps.length === 0 ? (
+        {routePatched ? (
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            El recorrido guardado tenía menos cruces que los puntos numerados.
+            Se muestran los {total} puntos en orden. El admin puede completar la
+            ruta en Recorridos.
+          </div>
+        ) : null}
+        {total === 0 ? (
           <div className="card p-5 text-muted">
             No hay puntos en tu recorrido. El admin debe armar la ruta.
           </div>
-        ) : active ? (
-          <article
-            key={`${active.puntoId}-${active.orden}-${activeIndex}`}
-            className="card border-2 border-[var(--forest)] p-5"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Cruce {position} de {total}
-                  {active.puntoNumero != null ? ` · Punto #${active.puntoNumero}` : ""}
-                </p>
-                <h2 className="display text-2xl">{active.puntoName}</h2>
-                <p className="text-sm text-muted">{active.puntoAddress}</p>
-                {active.esperado ? (
-                  <p className="mt-1 text-sm">
-                    Llegada estimada {active.esperado}
-                  </p>
-                ) : null}
-              </div>
-              <Badge tone={active.pendingAlerta ? "warn" : "ok"}>
-                {active.pendingAlerta ? "En cola" : "Activo"}
-              </Badge>
-            </div>
-            {active.pendingAlerta ? (
-              <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-950">
-                <p className="font-semibold">Aviso enviado</p>
-                <p className="mt-1">
-                  Esperando que el operador de este punto registre la llegada.
-                  Cuando lo haga, se habilitará el siguiente cruce
-                  {upcoming.length
-                    ? ` (#${upcoming[0].puntoNumero ?? upcoming[0].orden} ${upcoming[0].puntoName})`
-                    : ""}
-                  .
-                </p>
-              </div>
-            ) : (
-              <>
-                <AvisoButton
-                  key={`aviso-${active.puntoId}-${active.orden}-${activeIndex}`}
-                  puntoId={active.puntoId}
-                  canAlert={canAlert}
-                  pendingAlerta={false}
-                  disabledReason={disabledReason(active)}
-                />
-                <p className="mt-3 text-xs text-muted">
-                  Al avisar, el punto lo ve en cola. El siguiente cruce se libera
-                  cuando registren tu llegada.
-                </p>
-              </>
-            )}
-          </article>
         ) : (
-          <div className="card p-5 text-forest">
-            Completaste los {total} cruce{total === 1 ? "" : "s"} de tu recorrido
-            de hoy (todas las llegadas registradas).
-            {total <= 1 ? (
-              <p className="mt-2 text-sm text-muted">
-                Si deberían haber más paradas, el admin debe agregarlas al
-                recorrido (en orden) en Recorridos.
-              </p>
-            ) : null}
-          </div>
+          <>
+            <p className="text-sm text-muted">
+              Avisa el cruce al que te acercas. Después de cada aviso hay que
+              esperar {avisoCooldownSeconds}s para volver a sonar esa alarma
+              {plannedLaps > 1
+                ? ` (sirve para las ${plannedLaps} vueltas del día)`
+                : ""}
+              .
+            </p>
+            {routeStops.map((stop) => (
+              <article
+                key={stop.puntoId}
+                className="card border-2 border-[var(--forest)] p-5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Cruce {stop.orden} de {total}
+                      {stop.puntoNumero != null
+                        ? ` · Punto #${stop.puntoNumero}`
+                        : ""}
+                    </p>
+                    <h2 className="display text-2xl">{stop.puntoName}</h2>
+                    <p className="text-sm text-muted">{stop.puntoAddress}</p>
+                    {stop.esperado ? (
+                      <p className="mt-1 text-sm">
+                        Llegada estimada {stop.esperado}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Badge tone={stop.pendingAlerta ? "warn" : "ok"}>
+                    {stop.pendingAlerta ? "En cola" : "Listo"}
+                  </Badge>
+                </div>
+                <AvisoButton
+                  puntoId={stop.puntoId}
+                  canAlert={canAlert}
+                  lastAlertAt={stop.lastAlertAt}
+                  cooldownSeconds={avisoCooldownSeconds}
+                  disabledReason={disabledReason()}
+                />
+              </article>
+            ))}
+          </>
         )}
-
-        {arrivedSteps.length > 0 ? (
-          <div className="card p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              Llegadas registradas
-            </p>
-            <ul className="space-y-1 text-sm text-muted">
-              {arrivedSteps.map((s, i) => (
-                <li key={`${s.puntoId}-arr-${i}`}>
-                  ✓ Cruce {steps.indexOf(s) + 1}
-                  {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
-                  {s.puntoName}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {waitingSteps.length > 0 && !active?.pendingAlerta ? (
-          <div className="card p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              En cola del punto
-            </p>
-            <ul className="space-y-1 text-sm text-muted">
-              {waitingSteps.map((s, i) => (
-                <li key={`${s.puntoId}-wait-${i}`}>
-                  … Cruce {steps.indexOf(s) + 1}
-                  {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
-                  {s.puntoName}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {upcoming.length > 0 ? (
-          <div className="card p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              Pendientes (se abren tras registrar llegada)
-            </p>
-            <ul className="space-y-1 text-sm text-muted">
-              {upcoming.map((s, i) => (
-                <li key={`${s.puntoId}-up-${i}`}>
-                  Cruce {activeIndex + 2 + i}
-                  {s.puntoNumero != null ? ` · #${s.puntoNumero}` : ""}{" "}
-                  {s.puntoName}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
       </div>
 
       <section className="card p-5">

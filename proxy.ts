@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import {
   defaultPermissions,
+  homePath,
   requiredPermissionForPath,
 } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
@@ -17,7 +18,6 @@ function resolvePermissions(role: Role, raw: unknown): string[] {
   if (Array.isArray(raw) && raw.length > 0) {
     return raw.map(String);
   }
-  // Sesiones antiguas sin permisos en el JWT
   return defaultPermissions(role);
 }
 
@@ -81,7 +81,14 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     const res = NextResponse.redirect(url);
-    res.cookies.delete("cp_session");
+    res.cookies.set("cp_session", "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+      expires: new Date(0),
+    });
     return res;
   }
 
@@ -93,24 +100,26 @@ export async function proxy(request: NextRequest) {
   }
 
   if (role && (pathname === "/" || isPublic)) {
+    const dest = homePath(role);
+    if (pathname === dest) return NextResponse.next();
     const url = request.nextUrl.clone();
-    url.pathname = safeFallbackPath(role, permissions, pathname);
+    url.pathname = dest;
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin") && role !== "admin") {
+  if (pathname.startsWith("/admin") && role && role !== "admin") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = homePath(role);
     return NextResponse.redirect(url);
   }
   if (pathname.startsWith("/operador") && role !== "operator" && role !== "admin") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = role ? homePath(role) : "/login";
     return NextResponse.redirect(url);
   }
   if (pathname.startsWith("/conductor") && role !== "driver") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = role ? homePath(role) : "/login";
     return NextResponse.redirect(url);
   }
 

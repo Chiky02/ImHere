@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { ClientActionForm } from "@/components/client-action-form";
 import { ConfirmForm } from "@/components/confirm-form";
 import { PageTitle } from "@/components/ui";
 import { deleteRoleAction, saveRoleAction } from "@/lib/actions";
@@ -32,7 +33,7 @@ export default async function RolesPage() {
         subtitle="Cada rol pertenece a un área (admin, operador o conductor). Solo puede tener permisos de esa área, para no mezclar pantallas."
       />
 
-      <form action={saveRoleAction as never} className="card mb-6 space-y-4 p-4 sm:p-5">
+      <ClientActionForm action={saveRoleAction} className="card mb-6 space-y-4 p-4 sm:p-5">
         <h2 className="display text-xl">Nuevo rol</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -82,7 +83,7 @@ export default async function RolesPage() {
         <button className="btn btn-primary" type="submit">
           Crear rol
         </button>
-      </form>
+      </ClientActionForm>
 
       <div className="space-y-4">
         {roles.map((role) => (
@@ -109,7 +110,7 @@ export default async function RolesPage() {
                 </ConfirmForm>
               ) : null}
             </div>
-            <form action={saveRoleAction as never} className="space-y-3">
+            <ClientActionForm action={saveRoleAction} className="space-y-3">
               <input type="hidden" name="id" value={role.id} />
               <input type="hidden" name="home" value={role.home} />
               {!role.isSystem ? (
@@ -140,7 +141,7 @@ export default async function RolesPage() {
               <button className="btn btn-ghost text-sm" type="submit">
                 Guardar permisos
               </button>
-            </form>
+            </ClientActionForm>
           </article>
         ))}
       </div>

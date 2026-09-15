@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PageTitle } from "@/components/ui";
+import { ClientActionForm } from "@/components/client-action-form";
+import { ConfirmForm } from "@/components/confirm-form";
 import {
   assignBusetaAction,
   assignPuntoAction,
@@ -9,7 +11,6 @@ import {
   toggleUserActiveAction,
   updateUserRoleAction,
 } from "@/lib/actions";
-import { ConfirmForm } from "@/components/confirm-form";
 import * as repo from "@/lib/repo";
 import { readSession } from "@/lib/session";
 
@@ -33,7 +34,7 @@ export default async function EditPersonaPage({
     <AppShell user={user}>
       <PageTitle title={`Editar: ${person.name}`} />
       <div className="stack-cards wide">
-        <form action={saveUserAction as never} className="card admin-form space-y-3 p-4 sm:p-6">
+        <ClientActionForm action={saveUserAction} className="card admin-form space-y-3 p-4 sm:p-6">
           <input type="hidden" name="id" value={person.id} />
           <input type="hidden" name="roleId" value={person.roleId ?? ""} />
           <input type="hidden" name="approved" value={person.approved ? "on" : "off"} />
@@ -74,9 +75,9 @@ export default async function EditPersonaPage({
           <button className="btn btn-primary" type="submit">
             Guardar datos
           </button>
-        </form>
+        </ClientActionForm>
 
-        <form action={updateUserRoleAction as never} className="card admin-form space-y-3 p-4 sm:p-6">
+        <ClientActionForm action={updateUserRoleAction} className="card admin-form space-y-3 p-4 sm:p-6">
           <h2 className="display text-lg">Rol</h2>
           <input type="hidden" name="id" value={person.id} />
           <select
@@ -94,10 +95,10 @@ export default async function EditPersonaPage({
           <button className="btn btn-ghost" type="submit">
             Aplicar rol
           </button>
-        </form>
+        </ClientActionForm>
 
         {person.role === "driver" ? (
-          <form action={assignBusetaAction} className="card admin-form space-y-3 p-4 sm:p-6">
+          <ClientActionForm action={assignBusetaAction} className="card admin-form space-y-3 p-4 sm:p-6">
             <h2 className="display text-lg">Buseta</h2>
             <p className="text-sm text-muted">
               Si otro conductor la tenía, queda liberado al guardar.
@@ -118,11 +119,11 @@ export default async function EditPersonaPage({
             <button className="btn btn-primary" type="submit">
               Asignar buseta
             </button>
-          </form>
+          </ClientActionForm>
         ) : null}
 
         {person.role === "operator" || person.role === "admin" ? (
-          <form action={assignPuntoAction as never} className="card admin-form space-y-3 p-4 sm:p-6">
+          <ClientActionForm action={assignPuntoAction} className="card admin-form space-y-3 p-4 sm:p-6">
             <h2 className="display text-lg">Punto que gestiona</h2>
             <p className="text-sm text-muted">
               Fija el panel de punto sin tener que elegirlo cada vez.
@@ -146,7 +147,7 @@ export default async function EditPersonaPage({
             <button className="btn btn-primary" type="submit">
               Asignar punto
             </button>
-          </form>
+          </ClientActionForm>
         ) : null}
 
         <ConfirmForm

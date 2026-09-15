@@ -10,9 +10,20 @@ import {
   SYSTEM_ROLE_IDS,
 } from "./permissions";
 import * as repo from "./repo";
-import { horarioHoy } from "./schedule";
-import { annotateRouteProgress, currentRouteStepIndex } from "./route-progress";
-import { clearSessionCookie, homeForRole, readSession, setSessionCookie } from "./session";
+import { horarioHoy, resolveRouteStops } from "./schedule";
+import {
+  clampAvisoCooldownSeconds,
+  cooldownRemainingMs,
+  DEFAULT_AVISO_COOLDOWN_SECONDS,
+  formatCooldown,
+} from "./aviso-cooldown";
+import {
+  clearSessionCookie,
+  homeForRole,
+  readSession,
+  refreshSessionIfSelf,
+  setSessionCookie,
+} from "./session";
 import { nowIso, todayDate, isTodayBogota } from "./time";
 import { notifyDriver } from "./push";
 import type {
@@ -345,9 +356,12 @@ export async function saveUserAction(formData: FormData) {
   revalidatePath("/admin/conductores");
   revalidatePath("/admin/puntos");
   revalidatePath("/operador");
+  const self = await refreshSessionIfSelf(user.id);
   return {
     ok: true as const,
     message: isNew ? "Usuario creado correctamente." : "Usuario actualizado.",
+    home: self ? homeForRole(self.role) : undefined,
+    selfChanged: Boolean(self),
   };
 }
 
@@ -366,7 +380,12 @@ export async function assignPuntoAction(formData: FormData) {
   revalidatePath("/admin/conductores");
   revalidatePath("/admin/puntos");
   revalidatePath("/operador");
-  return { ok: true };
+  const self = await refreshSessionIfSelf(user.id);
+  return {
+    ok: true as const,
+    home: self ? homeForRole(self.role) : undefined,
+    selfChanged: Boolean(self),
+  };
 }
 
 export async function updateUserRoleAction(formData: FormData) {
@@ -382,7 +401,12 @@ export async function updateUserRoleAction(formData: FormData) {
   user.role = appRole.home;
   await repo.upsertUser(user);
   revalidatePath("/admin/conductores");
-  return { ok: true };
+  const self = await refreshSessionIfSelf(user.id);
+  return {
+    ok: true as const,
+    home: self ? homeForRole(self.role) : undefined,
+    selfChanged: Boolean(self),
+  };
 }
 
 export async function toggleUserActiveAction(formData: FormData) {
@@ -429,6 +453,9 @@ export async function saveRoleAction(formData: FormData) {
       permissions,
     });
     revalidatePath("/admin/roles");
+    if (session.roleId === existing.id) {
+      await refreshSessionIfSelf(session.id);
+    }
     return { ok: true, message: "Permisos del rol de sistema actualizados." };
   }
   const slug =
@@ -465,6 +492,9 @@ export async function saveRoleAction(formData: FormData) {
   };
   await repo.upsertRole(role);
   revalidatePath("/admin/roles");
+  if (session.roleId === role.id) {
+    await refreshSessionIfSelf(session.id);
+  }
   return { ok: true, message: "Rol guardado." };
 }
 
@@ -583,6 +613,8 @@ export async function assignBusetaAction(formData: FormData) {
   revalidatePath("/admin/busetas");
   revalidatePath("/conductor");
   revalidatePath("/conductor/perfil");
+  await refreshSessionIfSelf(user.id);
+  return { ok: true as const };
 }
 
 /** Assign/clear driver from the busetas table (driverId + busetaId). */
@@ -704,40 +736,38 @@ export async function avisoProximidadAction(formData: FormData) {
     const puntoId = String(formData.get("puntoId") ?? "");
     if (!puntoId) return { error: "Elige el punto al que te acercas." };
 
-    const [horarios, recorridos, alertas] = await Promise.all([
+    const [horarios, recorridos, alertas, puntos, settings] = await Promise.all([
       repo.listHorarios(),
       repo.listRecorridos(),
       repo.listAlertas(),
+      repo.listPuntos(),
+      repo.getSettings(),
     ]);
-    const horario = horarioHoy(horarios, user.id, user.busetaId);
+    const horario = horarioHoy(horarios, user.id, user.busetaId, recorridos);
     const recorrido = horario
       ? recorridos.find((r) => r.id === horario.recorridoId)
       : recorridos.find((r) => r.active);
-    const ordered = [...(recorrido?.puntos ?? [])].sort(
-      (a, b) => a.orden - b.orden,
+    const ordered = resolveRouteStops(recorrido, puntos);
+    if (ordered.length && !ordered.some((s) => s.puntoId === puntoId)) {
+      return { error: "Ese punto no está en tu recorrido." };
+    }
+
+    const cooldownSeconds = clampAvisoCooldownSeconds(
+      settings.avisoCooldownSeconds ?? DEFAULT_AVISO_COOLDOWN_SECONDS,
     );
-    if (ordered.length) {
-      const progress = annotateRouteProgress(ordered, alertas, user.id);
-      const idx = currentRouteStepIndex(progress);
-      if (idx < 0) {
-        return {
-          error:
-            "Ya completaste todos los cruces de tu recorrido de hoy (llegadas registradas).",
-        };
-      }
-      const current = progress[idx];
-      if (current.pendingAlerta) {
-        return {
-          error:
-            "Ya avisaste este punto. Espera a que el operador registre la llegada para continuar.",
-        };
-      }
-      if (current.puntoId !== puntoId) {
-        return {
-          error:
-            "Solo puedes avisar el siguiente punto del recorrido. Completa el actual primero.",
-        };
-      }
+    const last = [...alertas]
+      .filter(
+        (a) =>
+          a.conductorId === user.id &&
+          a.puntoId === puntoId &&
+          a.status !== "cancelled",
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const remaining = cooldownRemainingMs(last?.createdAt, cooldownSeconds);
+    if (remaining > 0) {
+      return {
+        error: `Espera ${formatCooldown(remaining)} para volver a avisar este punto.`,
+      };
     }
 
     const pending = alertas.find(
@@ -747,7 +777,9 @@ export async function avisoProximidadAction(formData: FormData) {
         a.status === "pending" &&
         isTodayBogota(a.createdAt),
     );
-    if (pending) return { error: "Ya avisaste que vas hacia ese punto." };
+    if (pending) {
+      await repo.updateAlerta(pending.id, { status: "cancelled" });
+    }
     await repo.insertAlerta({
       id: crypto.randomUUID(),
       puntoId,
@@ -766,7 +798,7 @@ export async function avisoProximidadAction(formData: FormData) {
     }
     revalidatePath("/conductor");
     revalidatePath("/operador");
-    return { ok: true as const };
+    return { ok: true as const, cooldownSeconds };
   } catch {
     return {
       error:
@@ -809,7 +841,7 @@ export async function registrarLlegadaAction(formData: FormData) {
     createdAt: nowIso(),
   });
   if (alertaId) await repo.updateAlerta(alertaId, { status: "arrived" });
-  await notifyPreviousBus(registro.id, puntoId, hora, false);
+  await dispatchCruceNotify(formData, registro.id, puntoId, hora, false);
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");
@@ -828,7 +860,7 @@ export async function registrarSalidaAction(formData: FormData) {
   const horaSalida = bogotaHhmmToIso(hhmm, day) ?? nowIso();
   const updated = await repo.updateRegistro(id, { horaSalidaReal: horaSalida });
   if (!updated) return { error: "No se encontró el registro." };
-  await notifyPreviousBus(updated.id, updated.puntoId, updated.horaLlegadaReal, true);
+  await dispatchCruceNotify(formData, updated.id, updated.puntoId, updated.horaLlegadaReal, true);
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");
@@ -868,6 +900,107 @@ export async function updateRegistroCruceAction(formData: FormData) {
 
   const updated = await repo.updateRegistro(id, patch);
   if (!updated) return { error: "No se pudo actualizar." };
+  revalidatePath("/operador");
+  revalidatePath("/admin/historial");
+  revalidatePath("/conductor");
+  return { ok: true };
+}
+
+async function dispatchCruceNotify(
+  formData: FormData,
+  registroId: string,
+  puntoId: string,
+  llegadaIso: string,
+  withSalida: boolean,
+) {
+  const notifyTo = String(formData.get("notifyTo") ?? "auto").trim();
+  if (!notifyTo || notifyTo === "none") return;
+  if (notifyTo === "auto") {
+    await notifyPreviousBus(registroId, puntoId, llegadaIso, withSalida);
+    return;
+  }
+  await notifySpecificDriver(notifyTo, registroId, puntoId, withSalida);
+}
+
+async function notifySpecificDriver(
+  userId: string,
+  registroId: string,
+  puntoId: string,
+  withSalida: boolean,
+) {
+  const current = (await repo.listRegistros()).find((r) => r.id === registroId);
+  if (!current) return;
+  const target = await repo.getUserById(userId);
+  if (!target || target.role !== "driver") return;
+  const [buseta, punto, conductor] = await Promise.all([
+    repo.getBuseta(current.busetaId),
+    repo.getPunto(puntoId),
+    repo.getUserById(current.conductorId),
+  ]);
+  const { formatTime } = await import("./time");
+  const llegada = formatTime(current.horaLlegadaReal);
+  const salida = current.horaSalidaReal ? formatTime(current.horaSalidaReal) : null;
+  const body =
+    withSalida && salida
+      ? `El bus ${buseta?.codigo ?? ""} (${conductor?.name ?? "quien cruzó"}) llegó a ${punto?.name ?? "el punto"} a las ${llegada} y salió a las ${salida}.`
+      : `El bus ${buseta?.codigo ?? ""} (${conductor?.name ?? "quien cruzó"}) llegó a ${punto?.name ?? "el punto"} a las ${llegada}.`;
+  await notifyDriver({
+    id: crypto.randomUUID(),
+    userId: target.id,
+    title: "Aviso de cruce",
+    body,
+    read: false,
+    createdAt: nowIso(),
+    registroId,
+    puntoId,
+  });
+}
+
+export async function registrarCruceManualAction(formData: FormData) {
+  const session = await operator();
+  const conductorId = String(formData.get("conductorId") ?? "");
+  const busetaId = String(formData.get("busetaId") ?? "");
+  const puntoId = String(formData.get("puntoId") ?? "");
+  const horaLlegadaInput = String(formData.get("horaLlegada") ?? "").trim();
+  const descripcion = String(formData.get("descripcion") ?? "").trim().slice(0, 500);
+  if (!conductorId || !busetaId || !puntoId) {
+    return { error: "Elige buseta, conductor y confirma el punto." };
+  }
+  const { bogotaHhmmToIso, hhmmNow, nowIso, todayDate } = await import("./time");
+  const hhmm = horaLlegadaInput || hhmmNow();
+  const hora = bogotaHhmmToIso(hhmm, todayDate()) ?? nowIso();
+  const existingPending = (await repo.listAlertas()).find(
+    (a) =>
+      a.conductorId === conductorId &&
+      a.puntoId === puntoId &&
+      a.status === "pending" &&
+      isTodayBogota(a.createdAt),
+  );
+  const alertaId = existingPending?.id ?? crypto.randomUUID();
+  if (existingPending) {
+    await repo.updateAlerta(alertaId, { status: "arrived" });
+  } else {
+    await repo.insertAlerta({
+      id: alertaId,
+      puntoId,
+      conductorId,
+      busetaId,
+      createdAt: nowIso(),
+      status: "arrived",
+    });
+  }
+  const registro = await repo.insertRegistro({
+    id: crypto.randomUUID(),
+    puntoId,
+    conductorId,
+    busetaId,
+    alertaId,
+    horaLlegadaReal: hora,
+    registradoPor: session.id,
+    descripcion: descripcion || "Registro manual (sin aviso de la app).",
+    createdAt: nowIso(),
+  });
+  await dispatchCruceNotify(formData, registro.id, puntoId, hora, false);
   revalidatePath("/operador");
   revalidatePath("/admin/historial");
   revalidatePath("/conductor");
@@ -1010,5 +1143,17 @@ export async function resetAlertSoundAction() {
   revalidatePath("/admin/configuracion");
   revalidatePath("/operador");
   revalidatePath("/operador/sonido");
+}
+
+export async function saveAvisoCooldownAction(formData: FormData) {
+  const user = await readSession();
+  if (!user || user.role !== "admin") {
+    return { error: "No autorizado." };
+  }
+  const seconds = clampAvisoCooldownSeconds(formData.get("avisoCooldownSeconds"));
+  await repo.saveSettings({ avisoCooldownSeconds: seconds });
+  revalidatePath("/admin/configuracion");
+  revalidatePath("/conductor");
+  return { ok: true as const, message: `Espera entre avisos: ${seconds} segundos.` };
 }
 

@@ -134,6 +134,8 @@ export type AppSettings = {
   alertSoundName?: string;
   /** ISO timestamp for cache-busting audio URLs */
   updatedAt?: string;
+  /** Seconds a driver must wait before alerting the same checkpoint again */
+  avisoCooldownSeconds?: number;
 };
 
 export type Database = {

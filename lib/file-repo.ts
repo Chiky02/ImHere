@@ -269,12 +269,15 @@ export function normalizePhone(phone: string) {
 
 export async function getSettings() {
   const db = await readDb();
-  return db.settings ?? { alertSoundUrl: "/sounds/alerta.wav" };
+  return db.settings ?? {
+    alertSoundUrl: "/sounds/alerta.wav",
+    avisoCooldownSeconds: 180,
+  };
 }
 
 export async function saveSettings(patch: Partial<AppSettings>) {
   return updateDb((db) => {
-    if (!db.settings) db.settings = { alertSoundUrl: "/sounds/alerta.wav" };
+    if (!db.settings) db.settings = { alertSoundUrl: "/sounds/alerta.wav", avisoCooldownSeconds: 180 };
     db.settings = {
       ...db.settings,
       ...patch,

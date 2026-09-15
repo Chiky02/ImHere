@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { AvisoCooldownConfig } from "@/components/aviso-cooldown-config";
 import { AlertSoundConfig } from "@/components/alert-sound-config";
 import { PageTitle } from "@/components/ui";
 import * as repo from "@/lib/repo";
@@ -14,7 +15,10 @@ export default async function ConfiguracionPage() {
     <AppShell user={user}>
       <PageTitle
         title="Configuración"
-        subtitle="Sonido de alerta del panel cuando un bus avisa que viene."
+        subtitle="Sonido de alerta y tiempo de espera entre avisos del conductor."
+      />
+      <AvisoCooldownConfig
+        seconds={settings.avisoCooldownSeconds ?? 180}
       />
       <AlertSoundConfig
         currentUrl={resolveAlertSoundUrl(settings)}

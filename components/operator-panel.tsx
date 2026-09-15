@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
+  registrarCruceManualAction,
   registrarLlegadaAction,
   registrarSalidaAction,
   updateRegistroCruceAction,
@@ -21,6 +22,141 @@ function bogotaHhmmNow() {
     minute: "2-digit",
     hour12: false,
   }).format(new Date());
+}
+
+function NotifyToSelect({
+  id,
+  drivers,
+  defaultValue = "auto",
+}: {
+  id: string;
+  drivers: { id: string; name: string }[];
+  defaultValue?: string;
+}) {
+  return (
+    <div className="min-w-0 sm:col-span-2">
+      <label htmlFor={`notify-${id}`}>Avisar a</label>
+      <select
+        id={`notify-${id}`}
+        name="notifyTo"
+        defaultValue={defaultValue}
+        className="input-compact"
+      >
+        <option value="none">Nadie</option>
+        <option value="auto">Al bus anterior en este punto</option>
+        {drivers.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ManualCruceForm({
+  puntoId,
+  drivers,
+  busetas,
+  pending,
+  onResult,
+}: {
+  puntoId: string;
+  drivers: { id: string; name: string; busetaId?: string }[];
+  busetas: { id: string; codigo: string }[];
+  pending: boolean;
+  onResult: (msg: string) => void;
+}) {
+  const [busetaId, setBusetaId] = useState(busetas[0]?.id ?? "");
+  const matching = drivers.filter((d) => !busetaId || d.busetaId === busetaId);
+  const conductorOptions = matching.length ? matching : drivers;
+  const [conductorId, setConductorId] = useState(conductorOptions[0]?.id ?? "");
+
+  return (
+    <form
+      className="grid gap-3 sm:grid-cols-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        void (async () => {
+          const fd = new FormData(form);
+          fd.set("puntoId", puntoId);
+          fd.set("busetaId", busetaId);
+          fd.set("conductorId", conductorId);
+          const res = await registrarCruceManualAction(fd);
+          onResult(res?.error ?? "Cruce anotado sin aviso de la app.");
+        })();
+      }}
+    >
+      <div>
+        <label htmlFor="manual-buseta">Buseta</label>
+        <select
+          id="manual-buseta"
+          name="busetaId"
+          required
+          className="input-compact"
+          value={busetaId}
+          onChange={(e) => {
+            const next = e.target.value;
+            setBusetaId(next);
+            const nextDrivers = drivers.filter((d) => !next || d.busetaId === next);
+            const opts = nextDrivers.length ? nextDrivers : drivers;
+            setConductorId(opts[0]?.id ?? "");
+          }}
+        >
+          <option value="">Elige buseta</option>
+          {busetas.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.codigo}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="manual-conductor">Quién pasó</label>
+        <select
+          id="manual-conductor"
+          name="conductorId"
+          required
+          className="input-compact"
+          value={conductorId}
+          onChange={(e) => setConductorId(e.target.value)}
+        >
+          <option value="">Elige conductor</option>
+          {conductorOptions.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="manual-hora">Hora llegada</label>
+        <input
+          id="manual-hora"
+          name="horaLlegada"
+          type="time"
+          defaultValue={bogotaHhmmNow()}
+          required
+          className="input-compact max-w-[9rem]"
+        />
+      </div>
+      <div>
+        <label htmlFor="manual-desc">Cómo pasó / nota</label>
+        <input
+          id="manual-desc"
+          name="descripcion"
+          maxLength={500}
+          placeholder="Ej. no usó la app, pasó de largo"
+          className="input-compact"
+        />
+      </div>
+      <NotifyToSelect id="manual" drivers={drivers} defaultValue="none" />
+      <button className="btn btn-primary w-full sm:w-auto" disabled={pending} type="submit">
+        Anotar cruce
+      </button>
+    </form>
+  );
 }
 
 export function OperatorPanel({
@@ -235,6 +371,25 @@ export function OperatorPanel({
       ) : null}
 
       <section className="card p-4 sm:p-5">
+        <h2 className="display mb-2 text-xl sm:text-2xl">Anotar sin la app</h2>
+        <p className="mb-3 text-sm text-muted">
+          Si el conductor no avisó, anota quién pasó, cómo fue, y elige a quién
+          notificar (o a nadie).
+        </p>
+        {puntoId ? (
+          <ManualCruceForm
+            puntoId={puntoId}
+            drivers={data.drivers ?? []}
+            busetas={data.busetasActivas ?? []}
+            pending={pending}
+            onResult={setMsg}
+          />
+        ) : (
+          <p className="text-muted">Elige un punto para anotar un cruce.</p>
+        )}
+      </section>
+
+      <section className="card p-4 sm:p-5">
         <h2 className="display mb-3 text-xl sm:text-2xl">En camino</h2>
         {data.incoming.length === 0 ? (
           <p className="text-muted">Nadie ha avisado todavía en este punto.</p>
@@ -270,7 +425,7 @@ export function OperatorPanel({
                   ) : null}
                 </div>
                 <form
-                  className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end"
+                  className="mt-3 grid gap-3 sm:grid-cols-2 sm:items-end"
                   onSubmit={(e) => {
                     e.preventDefault();
                     const form = e.currentTarget;
@@ -311,6 +466,11 @@ export function OperatorPanel({
                       placeholder="Ej. demora por tráfico"
                     />
                   </div>
+                  <NotifyToSelect
+                    id={`llegada-${a.id}`}
+                    drivers={data.drivers ?? []}
+                    defaultValue="auto"
+                  />
                   <button
                     className="btn btn-signal w-full sm:w-auto"
                     disabled={pending}
@@ -387,7 +547,7 @@ export function OperatorPanel({
                   </button>
                 </form>
                 <form
-                  className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                  className="grid gap-3 sm:grid-cols-2 sm:items-end"
                   onSubmit={(e) => {
                     e.preventDefault();
                     const form = e.currentTarget;
@@ -410,6 +570,11 @@ export function OperatorPanel({
                       className="max-w-[9rem]"
                     />
                   </div>
+                  <NotifyToSelect
+                    id={`salida-${r.id}`}
+                    drivers={data.drivers ?? []}
+                    defaultValue="auto"
+                  />
                   <button
                     className="btn btn-primary w-full sm:w-auto"
                     disabled={pending}

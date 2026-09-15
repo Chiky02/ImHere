@@ -1,10 +1,12 @@
 import type { AppSettings } from "./types";
+import { DEFAULT_AVISO_COOLDOWN_SECONDS } from "./aviso-cooldown";
 
 export const DEFAULT_ALERT_SOUND_URL = "/sounds/alerta.wav";
 
 export function defaultSettings(): AppSettings {
   return {
     alertSoundUrl: DEFAULT_ALERT_SOUND_URL,
+    avisoCooldownSeconds: DEFAULT_AVISO_COOLDOWN_SECONDS,
     updatedAt: new Date(0).toISOString(),
   };
 }

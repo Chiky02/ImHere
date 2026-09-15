@@ -1,5 +1,5 @@
 import * as repo from "./repo";
-import { horarioHoy, expectedAtPunto } from "./schedule";
+import { horarioHoy, expectedAtPunto, resolveRouteStops, PLANNED_LAPS_PER_DAY } from "./schedule";
 import { annotateRouteProgress, currentRouteStepIndex } from "./route-progress";
 import {
   dateInBogota,
@@ -10,6 +10,7 @@ import {
   todayDate,
   isTodayBogota,
 } from "./time";
+import { DEFAULT_AVISO_COOLDOWN_SECONDS } from "./aviso-cooldown";
 import type { SessionUser } from "./types";
 
 function isToday(iso: string) {
@@ -55,6 +56,8 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
       bitacora: [],
       lockedToPunto,
       needsPuntoAssignment: !assignedId,
+      drivers: users.filter((u) => u.role === "driver" && u.approved),
+      busetasActivas: busetas.filter((b) => b.active && !b.deletedAt),
     };
   }
   const incoming = alertas
@@ -129,6 +132,8 @@ export async function operatorSnapshot(user: SessionUser, puntoId?: string) {
     bitacora,
     lockedToPunto,
     needsPuntoAssignment: !assignedId,
+    drivers: users.filter((u) => u.role === "driver" && u.approved),
+    busetasActivas: busetas.filter((b) => b.active && !b.deletedAt),
   };
 }
 
@@ -141,6 +146,8 @@ export async function driverSnapshot(user: SessionUser) {
     recorridos,
     alertas,
     notificaciones,
+    registros,
+    settings,
   ] = await Promise.all([
     repo.getUserById(user.id),
     repo.listPuntos(),
@@ -149,34 +156,44 @@ export async function driverSnapshot(user: SessionUser) {
     repo.listRecorridos(),
     repo.listAlertas(),
     repo.listNotificaciones(),
+    repo.listRegistros(),
+    repo.getSettings(),
   ]);
   // Prefer DB over JWT so approval/buseta changes apply without re-login
   // (iPhone often keeps a long-lived session cookie).
   const approved = dbUser?.approved ?? user.approved;
   const busetaId = dbUser?.busetaId ?? user.busetaId;
   const buseta = busetaId ? busetas.find((b) => b.id === busetaId) : undefined;
-  const horario = horarioHoy(horarios, user.id, busetaId);
+  const horario = horarioHoy(horarios, user.id, busetaId, recorridos);
   const recorrido = horario
     ? recorridos.find((r) => r.id === horario.recorridoId)
     : recorridos.find((r) => r.active);
   const salidaHoy =
     dbUser?.salidaHoyFecha === todayDate() ? dbUser.salidaHoy : undefined;
-  const ordered = (recorrido?.puntos ?? [])
-    .slice()
-    .sort((a, b) => a.orden - b.orden);
-  const progress = annotateRouteProgress(ordered, alertas, user.id);
+  const declaredStops = (recorrido?.puntos ?? []).length;
+  const ordered = resolveRouteStops(recorrido, puntos);
+  const routeForEta = recorrido ? { ...recorrido, puntos: ordered } : undefined;
+  const progress = annotateRouteProgress(
+    ordered,
+    alertas,
+    user.id,
+    registros,
+    PLANNED_LAPS_PER_DAY,
+  );
   const steps = progress.map((step) => {
     const punto = puntos.find((p) => p.id === step.puntoId);
     return {
       puntoId: step.puntoId,
       orden: step.orden,
+      lap: step.lap,
+      stopIndex: step.stopIndex,
       tiempoEsperadoMin: step.tiempoEsperadoMin,
       puntoName: punto?.name ?? "Punto",
       puntoAddress: punto?.address ?? "",
       puntoNumero: punto?.numero,
       esperado:
-        horario && recorrido
-          ? expectedAtPunto(horario, recorrido, step.puntoId, salidaHoy)
+        horario && routeForEta
+          ? expectedAtPunto(horario, routeForEta, step.puntoId, salidaHoy)
           : undefined,
       pendingAlerta: step.pendingAlerta,
       arrived: step.arrived,
@@ -184,6 +201,37 @@ export async function driverSnapshot(user: SessionUser) {
     };
   });
   const activeIndex = currentRouteStepIndex(steps);
+  const stopsInRoute = ordered.length;
+  const plannedLaps = PLANNED_LAPS_PER_DAY;
+  const routePatched = ordered.length > declaredStops;
+  const avisoCooldownSeconds =
+    settings.avisoCooldownSeconds ?? DEFAULT_AVISO_COOLDOWN_SECONDS;
+  const routeStops = ordered.map((step, i) => {
+    const punto = puntos.find((p) => p.id === step.puntoId);
+    const last = alertas
+      .filter(
+        (a) =>
+          a.conductorId === user.id &&
+          a.puntoId === step.puntoId &&
+          a.status !== "cancelled" &&
+          isTodayBogota(a.createdAt),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return {
+      puntoId: step.puntoId,
+      orden: i + 1,
+      tiempoEsperadoMin: step.tiempoEsperadoMin,
+      puntoName: punto?.name ?? "Punto",
+      puntoAddress: punto?.address ?? "",
+      puntoNumero: punto?.numero,
+      esperado:
+        horario && routeForEta
+          ? expectedAtPunto(horario, routeForEta, step.puntoId, salidaHoy)
+          : undefined,
+      lastAlertAt: last?.createdAt,
+      pendingAlerta: last?.status === "pending",
+    };
+  });
   const inbox = notificaciones.filter((n) => n.userId === user.id);
   return {
     dbUser,
@@ -194,6 +242,11 @@ export async function driverSnapshot(user: SessionUser) {
     recorrido,
     steps,
     activeIndex,
+    stopsInRoute,
+    plannedLaps,
+    routePatched,
+    routeStops,
+    avisoCooldownSeconds,
     inbox,
     busetas,
     puntos,

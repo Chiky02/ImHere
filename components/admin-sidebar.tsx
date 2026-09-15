@@ -102,8 +102,8 @@ export function AdminSidebar({
       />
 
       <aside
-        className={`admin-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(17rem,88vw)] flex-col border-r border-line bg-white transition-transform lg:static lg:z-0 lg:translate-x-0 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        className={`admin-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(17rem,88vw)] flex-col border-r border-line bg-white lg:static lg:z-0 lg:w-[16.5rem] lg:translate-x-0 lg:transform-none ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         <div className="hidden border-b border-line px-4 py-4 lg:block">

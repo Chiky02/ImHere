@@ -611,14 +611,19 @@ export async function getSettings() {
     .maybeSingle();
   if (error) throw error;
   if (!data) {
-    return { alertSoundUrl: "/sounds/alerta.wav" } satisfies AppSettings;
+    return {
+      alertSoundUrl: "/sounds/alerta.wav",
+      avisoCooldownSeconds: 180,
+    } satisfies AppSettings;
   }
+  const cooldown = Number(data.aviso_cooldown_seconds);
   return {
     alertSoundUrl: data.alert_sound_url || "/sounds/alerta.wav",
     alertSoundData: data.alert_sound_data ?? undefined,
     alertSoundMime: data.alert_sound_mime ?? undefined,
     alertSoundName: data.alert_sound_name ?? undefined,
     updatedAt: data.updated_at ?? undefined,
+    avisoCooldownSeconds: Number.isFinite(cooldown) ? cooldown : 180,
   } satisfies AppSettings;
 }
 
@@ -629,14 +634,18 @@ export async function saveSettings(patch: Partial<AppSettings>) {
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  const { error } = await supabaseAdmin().from("app_settings").upsert({
+  const row: Record<string, unknown> = {
     id: 1,
     alert_sound_url: next.alertSoundUrl,
     alert_sound_data: next.alertSoundData ?? null,
     alert_sound_mime: next.alertSoundMime ?? null,
     alert_sound_name: next.alertSoundName ?? null,
     updated_at: next.updatedAt,
-  });
+  };
+  if (patch.avisoCooldownSeconds !== undefined) {
+    row.aviso_cooldown_seconds = next.avisoCooldownSeconds ?? 180;
+  }
+  const { error } = await supabaseAdmin().from("app_settings").upsert(row);
   if (error) throw error;
   return next;
 }

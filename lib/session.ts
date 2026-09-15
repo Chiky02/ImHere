@@ -20,12 +20,31 @@ function normalizePermissions(role: Role, raw: unknown): string[] {
   return defaultPermissions(role);
 }
 
+function samePerms(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((p) => set.has(p));
+}
+
+function cookieOpts(maxAge: number) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge,
+    expires: maxAge === 0 ? new Date(0) : undefined,
+  };
+}
+
 export async function signSession(user: SessionUser) {
   const permissions =
     user.permissions?.length > 0
       ? user.permissions
       : defaultPermissions(user.role);
-  return new SignJWT({
+  const defaults = defaultPermissions(user.role);
+  // Omit default permission lists to keep the cookie small (Vercel/edge 4KB).
+  const payload: Record<string, unknown> = {
     name: user.name,
     phone: user.phone,
     role: user.role,
@@ -35,8 +54,11 @@ export async function signSession(user: SessionUser) {
     puntoId: user.puntoId,
     approved: user.approved,
     active: user.active,
-    permissions,
-  })
+  };
+  if (!samePerms(permissions, defaults)) {
+    payload.permissions = permissions;
+  }
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
     .setIssuedAt()
@@ -74,17 +96,29 @@ export async function readSession(): Promise<SessionUser | null> {
 
 export async function setSessionCookie(user: SessionUser) {
   const token = await signSession(user);
-  (await cookies()).set(COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 14,
-  });
+  (await cookies()).set(COOKIE, token, cookieOpts(60 * 60 * 24 * 14));
 }
 
 export async function clearSessionCookie() {
-  (await cookies()).delete(COOKIE);
+  const jar = await cookies();
+  jar.set(COOKIE, "", cookieOpts(0));
+  jar.delete({ name: COOKIE, path: "/" });
+}
+
+/** Never replace the logged-in cookie with another person's session. */
+export async function refreshSessionIfSelf(userId: string) {
+  const session = await readSession();
+  if (!session || session.id !== userId) return session;
+  const { buildSessionUser } = await import("./auth-user");
+  const { getUserById } = await import("./repo");
+  const fresh = await getUserById(userId);
+  if (!fresh || fresh.active === false) {
+    await clearSessionCookie();
+    return null;
+  }
+  const next = await buildSessionUser(fresh);
+  await setSessionCookie(next);
+  return next;
 }
 
 export function homeForRole(role: Role) {
