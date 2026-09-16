@@ -5,6 +5,7 @@ import {
   homePath,
   requiredPermissionForPath,
 } from "@/lib/permissions";
+import { isPublicStaticPath } from "@/lib/push-recipients";
 import type { Role } from "@/lib/types";
 
 const PUBLIC = ["/login", "/registro"];
@@ -49,13 +50,7 @@ function safeFallbackPath(role: Role, permissions: string[], fromPath: string) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.includes(".") ||
-    pathname === "/sw.js" ||
-    pathname === "/manifest.webmanifest"
-  ) {
+  if (isPublicStaticPath(pathname)) {
     return NextResponse.next();
   }
 

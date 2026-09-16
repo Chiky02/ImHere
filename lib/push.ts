@@ -1,5 +1,10 @@
 import webpush from "web-push";
 import * as repo from "./repo";
+import {
+  buildAlertaPushPayload,
+  buildCrucePushPayload,
+  resolvePuntoAlertRecipients,
+} from "./push-recipients";
 import type { Notificacion } from "./types";
 
 export type PushPayload = {
@@ -76,28 +81,18 @@ export async function notifyPuntoOperators(opts: {
     repo.getPunto(opts.puntoId),
     repo.listUsers(),
   ]);
-  const ids = new Set<string>(punto?.operatorIds ?? []);
-  for (const u of users) {
-    if (u.active === false) continue;
-    if (
-      u.puntoId === opts.puntoId &&
-      (u.role === "operator" || u.role === "admin")
-    ) {
-      ids.add(u.id);
-    }
-  }
-  if (opts.exceptUserId) ids.delete(opts.exceptUserId);
-  await Promise.all(
-    [...ids].map((id) =>
-      sendPushToUser(id, {
-        type: "alerta",
-        title: opts.title,
-        body: opts.body,
-        url: "/operador",
-        puntoId: opts.puntoId,
-      }),
-    ),
-  );
+  const ids = resolvePuntoAlertRecipients({
+    puntoId: opts.puntoId,
+    punto,
+    users,
+    exceptUserId: opts.exceptUserId,
+  });
+  const payload = buildAlertaPushPayload({
+    title: opts.title,
+    body: opts.body,
+    puntoId: opts.puntoId,
+  });
+  await Promise.all(ids.map((id) => sendPushToUser(id, payload)));
 }
 
 export async function notifyDriverCruce(opts: {
@@ -106,11 +101,12 @@ export async function notifyDriverCruce(opts: {
   title: string;
   body: string;
 }) {
-  await sendPushToUser(opts.conductorId, {
-    type: "cruce",
-    title: opts.title,
-    body: opts.body,
-    url: "/conductor",
-    puntoId: opts.puntoId,
-  });
+  await sendPushToUser(
+    opts.conductorId,
+    buildCrucePushPayload({
+      title: opts.title,
+      body: opts.body,
+      puntoId: opts.puntoId,
+    }),
+  );
 }

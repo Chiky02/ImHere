@@ -94,14 +94,23 @@ VAPID (optional): `npx web-push generate-vapid-keys`
 
 ### Important in production
 
+- **Deployment Protection must be OFF for Production** (Project → Settings → Deployment Protection → None). If it is on, `/manifest.webmanifest` and `/sw.js` redirect to `vercel.com/sso-api`, the browser shows a CORS error, and Web Push / PWA break. Check with: `npm run check:public`.
 - Without Supabase keys, Vercel would use a temporary JSON in `/tmp` (it is lost). **Always configure Supabase.**
 - Alert audio is stored in the database (settings), not in environment variables.
 - After the first deploy, change the admin password from **Account**.
+- After setting VAPID keys, redeploy, open `/operador`, and press **Activar sonido** again (subscribe push).
+
+## Tests
+
+```bash
+npm test                 # unit tests (alert recipients, cooldown, PWA paths)
+npm run check:public     # probe production for Vercel SSO on PWA assets
+```
 
 ## Architecture
 
 - Next.js (App Router) on Vercel
 - Custom auth (phone + password, JWT cookie)
 - Persistence: local JSON **or** Supabase Postgres
-- Checkpoint panel: polling + configurable audio
+- Checkpoint panel: Web Push + refresh on event (no polling)
 - Driver: PWA + Web Push (if VAPID is set)
